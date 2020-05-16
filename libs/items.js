@@ -13,7 +13,10 @@ items.prototype._init = function () {
     this.canUseItemEffect = items_296f5d02_12fd_4166_a7c1_b5e830c9ee3a.canUseItemEffect;
     if (!items_296f5d02_12fd_4166_a7c1_b5e830c9ee3a.equipCondition)
         items_296f5d02_12fd_4166_a7c1_b5e830c9ee3a.equipCondition = {};
+    if (!items_296f5d02_12fd_4166_a7c1_b5e830c9ee3a.useItemEvent)
+        items_296f5d02_12fd_4166_a7c1_b5e830c9ee3a.useItemEvent = {};
     this.equipCondition = items_296f5d02_12fd_4166_a7c1_b5e830c9ee3a.equipCondition;
+    this.useItemEvent = items_296f5d02_12fd_4166_a7c1_b5e830c9ee3a.useItemEvent;
 }
 
 ////// 获得所有道具 //////
@@ -59,13 +62,23 @@ items.prototype.getItemEffect = function (itemId, itemNum) {
         var curr_hp = core.status.hero.hp;
         if (itemId in this.itemEffect) {
             try {
-                eval(this.itemEffect[itemId]);
+                for (var i = 0; i < itemNum; ++i)
+                    eval(this.itemEffect[itemId]);
             }
             catch (e) {
                 main.log(e);
             }
         }
         core.status.hero.statistics.hp += core.status.hero.hp - curr_hp;
+
+        if (this.useItemEvent[itemId]) {
+            try {
+                core.insertAction(this.useItemEvent[itemId]);
+            }
+            catch (e) {
+                main.log(e);
+            }
+        }
     }
     else {
         core.addItem(itemId, itemNum);
@@ -115,6 +128,14 @@ items.prototype._useItemEffect = function (itemId) {
             main.log(e);
         }
     }
+    if (this.useItemEvent[itemId]) {
+        try {
+            core.insertAction(this.useItemEvent[itemId]);
+        }
+        catch (e) {
+            main.log(e);
+        }
+    }
 }
 
 items.prototype._afterUseItem = function (itemId) {
@@ -125,10 +146,8 @@ items.prototype._afterUseItem = function (itemId) {
     if (core.status.hero.items[itemCls][itemId] <= 0)
         delete core.status.hero.items[itemCls][itemId];
 
-    if (!core.status.event.id) {
-        core.status.event.data = null;
+    if (!core.status.event.id)
         core.status.event.ui = null;
-    }
     core.updateStatusBar();
 }
 
@@ -193,6 +212,7 @@ items.prototype.setItem = function (itemId, itemNum) {
         if (itemCls != 'keys') delete core.status.hero.items[itemCls][itemId];
         else core.status.hero.items[itemCls][itemId] = 0;
     }
+    MessageManager.send('update','item', itemId);
     core.updateStatusBar();
 }
 
@@ -213,6 +233,7 @@ items.prototype.addItem = function (itemId, itemNum) {
     // 永久道具只能有一个
     if (itemCls == 'constants' && core.status.hero.items[itemCls][itemId] > 1)
         core.status.hero.items[itemCls][itemId] = 1;
+    MessageManager.send('update','item', itemId);
     core.updateStatusBar();
 }
 
@@ -226,6 +247,7 @@ items.prototype.removeItem = function (itemId, itemNum) {
         if (itemCls != 'keys') delete core.status.hero.items[itemCls][itemId];
         else core.status.hero.items[itemCls][itemId] = 0;
     }
+    MessageManager.send('update','item');
     core.updateStatusBar();
     return true;
 }
@@ -295,7 +317,7 @@ items.prototype.loadEquip = function (equipId, callback) {
         if (callback) callback();
         return;
     }
-
+    
     this._realLoadEquip(type, equipId, core.status.hero.equipment[type], callback);
 }
 
@@ -368,6 +390,7 @@ items.prototype._realLoadEquip = function (type, loadId, unloadId, callback) {
     if (loadId) core.drawTip("已装备上" + loadEquip.name, loadId);
     else if (unloadId) core.drawTip("已卸下" + unloadEquip.name, unloadId);
 
+    MessageManager.send('update','equip');
     if (callback) callback();
 }
 
@@ -425,4 +448,15 @@ items.prototype.quickLoadEquip = function (index) {
     this._realLoadEquip_playSound();
 
     core.drawTip("成功换上" + index + "号套装");
+}
+
+////// 获得装备直接增加的属性数据 //////
+items.prototype.getEquippedStatus = function (name) {
+    var value = 0;
+    core.status.hero.equipment.forEach(function (v) {
+        if (!v || !(core.material.items[v] || {}).equip) return;
+        if (core.material.items[v].equip.percentage) return;
+        value += core.material.items[v].equip[name] || 0;
+    });
+    return value;
 }

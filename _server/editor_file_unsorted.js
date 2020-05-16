@@ -5,9 +5,8 @@ editor_file = function (editor, callback) {
 
     editor.file.loadCommentjs(callback);
 
-    ///////////////////////////////////////////////////////////////////////////
-
     editor.file.saveFloorFile = function (callback) {
+        //callback(err:String)
         checkCallback(callback);
         /* if (!isset(editor.currentFloorId) || !isset(editor.currentFloorData)) {
           callback('未选中文件或无数据');
@@ -16,7 +15,7 @@ editor_file = function (editor, callback) {
         var datastr = ['main.floors.', editor.currentFloorId, '=\n'];
 
         if (core.floorIds.indexOf(editor.currentFloorId) >= 0) {
-            for(var ii=0,name;name=['map','bgmap','fgmap'][ii];ii++){
+            for(var ii=0,name;name=['map','bgmap', 'bg2map','fgmap', 'fg2map'][ii];ii++){
                 var mapArray=editor[name].map(function (v) {
                     return v.map(function (v) {
                         return v.idnum || v || 0
@@ -25,27 +24,11 @@ editor_file = function (editor, callback) {
                 editor.currentFloorData[name]=mapArray;
             }
         }
-        
-        // format 更改实现方式以支持undefined删除
-        var tempJsonObj=Object.assign({},editor.currentFloorData);
-        var tempMap=[['map',editor.util.guid()],['bgmap',editor.util.guid()],['fgmap',editor.util.guid()]];
-        tempMap.forEach(function(v){
-            v[2]=tempJsonObj[v[0]];
-            tempJsonObj[v[0]]=v[1];
-        });
-        var tempJson=JSON.stringify(tempJsonObj, null, 4);
-        tempMap.forEach(function(v){
-            tempJson=tempJson.replace('"'+v[1]+'"','[\n'+ formatMap(v[2],v[0]!='map')+ '\n]')
-        });
-        datastr = datastr.concat([tempJson]);
-        datastr = datastr.join('');
-        alertWhenCompress();
-        fs.writeFile(filename, encode(datastr), 'base64', function (err, data) {
-            editor.addUsedFlags(datastr);
-            callback(err);
-        });
+        editor.file.saveFloor(editor.currentFloorData, callback)
     }
-    //callback(err:String)
+
+    ///////////////////////////////////////////////////////////////////////////
+
     editor.file.saveNewFile = function (saveFilename, callback) {
         //saveAsFilename不含'/'不含'.js'
         checkCallback(callback);
@@ -135,7 +118,7 @@ editor_file = function (editor, callback) {
                     delete data[t];
                 else {
                     if (t=='map') {
-                        datastr = datastr.concat(['\n"', t, '": [\n', formatMap(data[t]), '\n],']);
+                        datastr = datastr.concat(['\n"', t, '": [\n', editor.file.formatMap(data[t]), '\n],']);
                     }
                     else {
                         datastr = datastr.concat(['\n"', t, '": ', JSON.stringify(data[t], null, 4), ',']);
@@ -146,7 +129,7 @@ editor_file = function (editor, callback) {
             datastr = datastr.join('');
             datas.push(encode(datastr));
         }
-        alertWhenCompress();
+        editor.file.alertWhenCompress();
         fs.writeMultiFiles(filenames, datas, function (err, data) {
             callback(err);
         });
@@ -163,10 +146,14 @@ editor_file = function (editor, callback) {
         var templateActions = [];
 
         var image = info.images;
+        var bindFaceIds = false;
 
         if (image=='autotile') {
             callback('不能对自动元件进行自动注册！');
             return;
+        }
+        if (image=='npc48' && confirm("你想绑定npc48的朝向么？\n如果是，则会连续四个一组的对npc48的faceIds进行自动绑定。")) {
+            bindFaceIds = true;
         }
         var c=image.toUpperCase().charAt(0);
 
@@ -179,15 +166,20 @@ editor_file = function (editor, callback) {
         var allIds = [];
         editor.ids.forEach(function (v) {
             if (v.images==image) {
-                allIds[v.y]=true;
+                allIds[v.y]=v;
             }
         })
 
         var per_height = image.endsWith('48')?48:32;
 
+        var faceIds = []; // down, left, right, up
+
         var idnum=300;
         for (var y=0; y<editor.widthsX[image][3]/per_height;y++) {
-            if (allIds[y]) continue;
+            if (allIds[y] != null) {
+                faceIds.push(allIds[y]);
+                continue;
+            }
             while (editor.core.maps.blocksInfo[idnum]) idnum++;
 
             // get id num
@@ -199,12 +191,24 @@ editor_file = function (editor, callback) {
             else {
                 iconActions.push(["add", "['" + image + "']['" + id + "']", y])
             }
-            mapActions.push(["add", "['" + idnum + "']", {'cls': image, 'id': id}])
+            mapActions.push(["add", "['" + idnum + "']", {'cls': image, 'id': id}]);
+            faceIds.push({idnum: idnum, id: id});
             if (image=='items')
                 templateActions.push(["add", "['items']['" + id + "']", editor.file.comment._data.items_template]);
             else if (image.indexOf('enemy')==0)
                 templateActions.push(["add", "['" + id + "']", editor.file.comment._data.enemys_template]);
             idnum++;
+        }
+
+        if (bindFaceIds) {
+            for (var i = 0; i < faceIds.length - 3; i+=4) {
+                var down = faceIds[i], left = faceIds[i+1], right = faceIds[i+2], up = faceIds[i+3];
+                var obj = {down: down.id, left: left.id, right: right.id, up: up.id};
+                mapActions.push(["add", "['" + down.idnum + "']['faceIds']", obj]);
+                mapActions.push(["add", "['" + left.idnum + "']['faceIds']", obj]);
+                mapActions.push(["add", "['" + right.idnum + "']['faceIds']", obj]);
+                mapActions.push(["add", "['" + up.idnum + "']['faceIds']", obj]);
+            }
         }
 
         if (mapActions.length==0) {
@@ -469,7 +473,8 @@ editor_file = function (editor, callback) {
         checkCallback(callback);
         if (isset(actionList) && actionList.length > 0) {
             actionList.forEach(function (value) {
-                value[1] = value[1] + "['" + x + "," + y + "']";
+                if(/\['autoEvent'\]\['\d+'\]$/.test(value[1]))value[1]=value[1].replace(/\['\d+'\]$/,function(v){return "['" + x + "," + y + "']"+v})
+                else value[1] = value[1] + "['" + x + "," + y + "']";
             });
             saveSetting('floorloc', actionList, function (err) {
                 callback([err]);
@@ -523,6 +528,8 @@ editor_file = function (editor, callback) {
                     delete(locObj.map);
                     delete(locObj.bgmap);
                     delete(locObj.fgmap);
+                    delete(locObj.bg2map);
+                    delete(locObj.fg2map);
                     return locObj;
                 })(),
                 editor.file.comment._data.floors._data.floor,
@@ -682,7 +689,41 @@ editor_file = function (editor, callback) {
                 null]);
         }
     }
+
+    editor.file.editSpecials = function (id, actionList, callback) {
+        /*actionList:[
+          ["change","['test']","function(x,y){console.log(x,y)}"],
+        ]
+        为[]时只查询不修改
+        */
+        checkCallback(callback);
+        if (isset(actionList) && actionList.length > 0) {
+            saveSetting('specials', actionList, function (err) {
+                editor.mode._flush_specials();
+                callback([err]);
+            });
+        } else {
+            callback([
+                (function () {
+                    var locObj_ = {};
+                    Object.keys(editor.file.comment._data.specials._data).forEach(function (v) {
+                        if (isset(specials_90f36752_8815_4be8_b32b_d7fad1d0542e[id][v]) && v !== 'specials')
+                            locObj_[v] = specials_90f36752_8815_4be8_b32b_d7fad1d0542e[id][v];
+                        else
+                            locObj_[v] = null;
+                    });
+                    return locObj_;
+                })(),
+                editor.file.comment._data.specials,
+                null]);
+        }
+    }
     //callback([obj,commentObj,err:String])
+
+    ////////////////////////////////////////////////////////////////////
+
+
+
 
     ////////////////////////////////////////////////////////////////////
 
@@ -700,32 +741,7 @@ editor_file = function (editor, callback) {
         }
     }
 
-    var formatMap = function (mapArr,trySimplify) {
-        if(!mapArr || JSON.stringify(mapArr)==JSON.stringify([]))return '';
-        if(trySimplify){
-            //检查是否是全0二维数组
-            var jsoncheck=JSON.stringify(mapArr).replace(/\D/g,'');
-            if(jsoncheck==Array(jsoncheck.length+1).join('0'))return '';
-        }
-        //把二维数组格式化
-        var formatArrStr = '';
-        var arr = JSON.stringify(mapArr).replace(/\s+/g, '').split('],[');
-        var si=mapArr.length-1,sk=mapArr[0].length-1;
-        for (var i = 0; i <= si; i++) {
-            var a = [];
-            formatArrStr += '    [';
-            if (i == 0 || i == si) a = arr[i].split(/\D+/).join(' ').trim().split(' ');
-            else a = arr[i].split(/\D+/);
-            for (var k = 0; k <= sk; k++) {
-                var num = parseInt(a[k]);
-                formatArrStr += Array(Math.max(4 - String(num).length, 0)).join(' ') + num + (k == sk ? '' : ',');
-            }
-            formatArrStr += ']' + (i == si ? '' : ',\n');
-        }
-        return formatArrStr;
-    }
-
-    var encode = editor.util.encode64
+    var encode = editor.util.encode64;
 
     var alertWhenCompress = function(){
         if(editor.useCompress===true){
@@ -761,7 +777,7 @@ editor_file = function (editor, callback) {
     var saveSetting = function (file, actionList, callback) {
         //console.log(file);
         //console.log(actionList);
-        alertWhenCompress();
+        editor.file.alertWhenCompress();
 
         if (file == 'icons') {
             actionList.forEach(function (value) {
@@ -863,7 +879,13 @@ editor_file = function (editor, callback) {
         if (file == 'floorloc') {
             actionList.forEach(function (value) {
                 // 检测null/undefined
-                if (value[2]==null)
+                if(/\['autoEvent'\]\['\d+,\d+'\]\['\d+'\]$/.test(value[1])){
+                    var tempvalue=value[1].replace(/\['\d+'\]$/,'')
+                    tempvalue="editor.currentFloorData" +tempvalue
+                    tempvalue=tempvalue+'='+tempvalue+'||{}'
+                    eval(tempvalue)
+                }
+                if (value[2]==null && value[0]!=='add')
                     eval("delete editor.currentFloorData" + value[1]);
                 else
                     eval("editor.currentFloorData" + value[1] + '=' + JSON.stringify(value[2]));
@@ -908,8 +930,23 @@ editor_file = function (editor, callback) {
             });
             return;
         }
+        if(file == 'specials') {
+            actionList.forEach(function (value) {
+                var obj = specials_90f36752_8815_4be8_b32b_d7fad1d0542e[editor.mode.index||0];
+                obj = obj || {};
+                eval('specials_90f36752_8815_4be8_b32b_d7fad1d0542e['+(editor.mode.index||0)+']'+value[1]+'='+JSON.stringify(value[2]));
+            });
+            var datastr = 'var specials_90f36752_8815_4be8_b32b_d7fad1d0542e = \n';
+            datastr += JSON.stringify(specials_90f36752_8815_4be8_b32b_d7fad1d0542e, null, '\t');
+            fs.writeFile('project/specials.js', encode(datastr), 'base64', function (err, data) {
+                callback(err);
+            });
+            return;
+        }
         callback('出错了,要设置的文件名不识别');
     }
+
+    editor.file.saveSetting = saveSetting;
 
     return editor_file;
 }

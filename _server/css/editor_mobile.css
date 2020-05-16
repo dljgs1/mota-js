@@ -110,6 +110,10 @@ body {
     position: absolute;
 }
 
+#mid2 {
+    display: none;
+}
+
 #mapEdit {
     overflow: hidden;
 }
@@ -270,8 +274,10 @@ body {
 
 #iconExpandBtn {
     position: absolute;
-    left: 10px;
+    left: 20px;
     bottom: 30px;
+    font-size: 15px;
+    padding: 6px;
     display: none;
 }
 

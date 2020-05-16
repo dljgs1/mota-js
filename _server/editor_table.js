@@ -26,13 +26,19 @@ editor_table_wrapper = function (editor) {
     editor_table.prototype.textarea = function (value, indent) {
         return /* html */`<textarea spellcheck='false'>${JSON.stringify(value, null, indent || 0)}</textarea>\n`
     }
+    editor_table.prototype.editGrid = function (showComment) {
+        var html = "";
+        if (showComment) html += "<button onclick='editor.table.onCommentBtnClick(this)'>显示完整注释</button><br/>";
+        html += "<button onclick='editor.table.onEditBtnClick(this)'>编辑表格内容</button>";
+        return html;
+    }
 
     editor_table.prototype.title = function () {
-        return /* html */`\n<tr><td>条目</td><td>注释</td><td>值</td></tr>\n`
+        return /* html */`\n<tr><td>条目</td><td>注释</td><td>值</td><td>操作</td></tr>\n`
     }
 
     editor_table.prototype.gap = function (field) {
-        return /* html */`<tr><td>----</td><td>----</td><td>${field}</td></tr>\n`
+        return /* html */`<tr><td>----</td><td>----</td><td>${field}</td><td>----</td></tr>\n`
     }
 
     editor_table.prototype.tr = function (guid, field, shortField, commentHTMLescape, cobjstr, shortCommentHTMLescape, tdstr) {
@@ -40,6 +46,7 @@ editor_table_wrapper = function (editor) {
         <td title="${field}">${shortField}</td>
         <td title="${commentHTMLescape}" cobj="${cobjstr}">${shortCommentHTMLescape}</td>
         <td><div class="etableInputDiv">${tdstr}</div></td>
+        <td>${editor.table.editGrid(commentHTMLescape != shortCommentHTMLescape)}</td>
         </tr>\n`
     }
 
@@ -122,7 +129,7 @@ editor_table_wrapper = function (editor) {
                 if (keysForTableOrder[ii] === voidMark) {
                     if (typeof id_815975ad_ee6f_4684_aac7_397b7e392702 === "undefined") {
                         // alert('comment和data不匹配,请在群 HTML5造塔技术交流群 959329661 内反馈')
-                        console.error('comment和data不匹配,请在群 HTML5造塔技术交流群 959329661 内反馈')
+                        //console.error('comment和data不匹配,请在群 HTML5造塔技术交流群 959329661 内反馈')
                         id_815975ad_ee6f_4684_aac7_397b7e392702 = 1;
                     }
                     pvobj[ii] = null;
@@ -145,6 +152,7 @@ editor_table_wrapper = function (editor) {
                     if (key === '_data') continue;
                     if (cobj[key] instanceof Function) cobj[key] = cobj[key](args);
                 }
+                pvobj[ii] = vobj = args.vobj;
                 // 标记为_hide的属性不展示
                 if (cobj._hide) continue;
                 if (!cobj._leaf) {
@@ -193,7 +201,7 @@ editor_table_wrapper = function (editor) {
         // "['a']['b']" => "b"
         var shortField = field.split("']").slice(-2)[0].split("['").slice(-1)[0];
         // 把长度超过 charlength 的字符改成 固定长度+...的形式
-        shortField = (shortField.length < charlength ? shortField : shortField.slice(0, charlength) + '...');
+        // shortField = (shortField.length < charlength ? shortField : shortField.slice(0, charlength) + '...');
 
         // 完整的内容转义后供悬停查看
         var commentHTMLescape = editor.util.HTMLescape(comment);
@@ -214,6 +222,12 @@ editor_table_wrapper = function (editor) {
         var thiseval = vobj;
         if (cobj._select) {
             var values = cobj._select.values;
+            if(cobj._select.views){// 如果有视图函数 转成视图
+                if(values.indexOf(~~thiseval)>=0){
+                    thiseval = cobj._select.views[values.indexOf(~~thiseval)];
+                }
+                values = cobj._select.views;
+            }
             return editor.table.select(thiseval, values);
         } else if (cobj._input) {
             return editor.table.text(thiseval);
@@ -238,7 +252,9 @@ editor_table_wrapper = function (editor) {
             return eval(cobj._range);
         }
         if (cobj._select) {
-            return cobj._select.values.indexOf(thiseval) !== -1;
+            var values =  cobj._select.values;
+            if(typeof values =="function")values = values();
+            return values.indexOf(thiseval) !== -1;
         }
         if (cobj._bool) {
             return [true, false].indexOf(thiseval) !== -1;
@@ -257,6 +273,7 @@ editor_table_wrapper = function (editor) {
         var thisTr = document.getElementById(guid);
         var input = thisTr.children[2].children[0].children[0];
         var field = thisTr.children[0].getAttribute('title');
+        
         var cobj = JSON.parse(thisTr.children[1].getAttribute('cobj'));
         var modeNode = thisTr.parentNode;
         while (!editor_mode._ids.hasOwnProperty(modeNode.getAttribute('id'))) {
@@ -285,10 +302,17 @@ editor_table_wrapper = function (editor) {
         var thiseval = null;
         if (input.checked != null) input.value = input.checked;
         try {
+            if (input.value == '') input.value = 'null';
             thiseval = JSON.parse(input.value);
         } catch (ee) {
             printe(field + ' : ' + ee);
             throw ee;
+        }
+        if (cobj._select){
+            var values = cobj._select.values;
+            if(cobj._select.views){// 有视图 则转为数据下标
+                thiseval = values[cobj._select.views.indexOf(thiseval)];
+            }
         }
         if (editor.table.checkRange(cobj, thiseval)) {
             editor_mode.addAction(['change', field, thiseval]);
@@ -296,6 +320,25 @@ editor_table_wrapper = function (editor) {
         } else {
             printe(field + ' : 输入的值不合要求,请鼠标放置在注释上查看说明');
         }
+    }
+
+    /**
+     * 当"显示完整注释"被按下时
+     */
+    editor_table.prototype.onCommentBtnClick = function (button) {
+        var tr = button.parentNode.parentNode;
+        printf(tr.children[1].getAttribute('title'));
+    }
+
+    /**
+     * 当"编辑表格内容"被按下时
+     */
+    editor_table.prototype.onEditBtnClick = function (button) {
+        var tr = button.parentNode.parentNode;
+        var guid = tr.getAttribute('id');
+        var cobj = JSON.parse(tr.children[1].getAttribute('cobj'));
+        if (cobj._type === 'event') editor_blockly.import(guid, { type: cobj._event });
+        if (cobj._type === 'textarea') editor_multi.import(guid, { lint: cobj._lint, string: cobj._string });
     }
 
     /**
@@ -337,12 +380,22 @@ editor_table_wrapper = function (editor) {
     editor_table.prototype.addfunc = function (guid, obj, commentObj, thisTr, input, field, cobj, modeNode) {
         editor_mode.onmode(editor_mode._ids[modeNode.getAttribute('id')]);
 
-        var mode = document.getElementById('editModeSelect').value;
+        var mode = editor.dom.editModeSelect.value;
 
         // 1.输入id
-        var newid = prompt('请输入新项的ID（仅公共事件支持中文ID）');
-        if (newid == null || newid.length == 0) {
-            return;
+        var newid = '2';
+        if (mode == 'loc') {
+            var ae = editor.currentFloorData.autoEvent[editor_mode.pos.x + ',' + editor_mode.pos.y];
+            if (ae != null) {
+                var testid;
+                for (testid = 2; Object.hasOwnProperty.call(ae, testid); testid++); // 从3开始是因为comment中设置了始终显示012
+                newid = testid + '';
+            }
+        } else {
+            newid = prompt('请输入新项的ID（仅公共事件支持中文ID）');
+            if (newid == null || newid.length == 0) {
+                return;
+            }
         }
 
         // 检查commentEvents

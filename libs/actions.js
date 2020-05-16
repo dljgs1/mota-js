@@ -42,6 +42,7 @@ actions.prototype._init = function () {
     // --- onmove注册
     this.registerAction('onmove', '_sys_checkReplay', this._sys_checkReplay, 100);
     this.registerAction('onmove', '_sys_onmove_paint', this._sys_onmove_paint, 50);
+    this.registerAction('onmove', '_sys_onmove_choices', this._sys_onmove_choices, 30);
     this.registerAction('onmove', '_sys_onmove', this._sys_onmove, 0);
     // --- onup注册
     this.registerAction('onup', '_sys_checkReplay', this._sys_checkReplay, 100);
@@ -58,6 +59,8 @@ actions.prototype._init = function () {
     // --- longClick注册
     this.registerAction('longClick', '_sys_longClick_lockControl', this._sys_longClick_lockControl, 50);
     this.registerAction('longClick', '_sys_longClick', this._sys_longClick, 0);
+    // --- onStatusBarClick注册
+    this.registerAction('onStatusBarClick', '_sys_onStatusBarClick', this._sys_onStatusBarClick, 0);
 
 }
 
@@ -439,6 +442,7 @@ actions.prototype._sys_ondown_lockControl = function (x, y, px, py) {
         core.setFlag('px', px);
         core.setFlag('py', py);
         core.status.route.push("input:" + (1000000 + 1000 * px + py));
+        core.events.__action_wait_afterGet(core.status.event.data.current);
         core.doAction();
     }
     else {
@@ -485,6 +489,30 @@ actions.prototype._sys_onmove_paint = function (x, y, px, py) {
     }
 }
 
+actions.prototype._sys_onmove_choices = function (x, y) {
+    if (!core.status.lockControl) return false;
+
+    switch (core.status.event.id) {
+        case 'action':
+            if (core.status.event.data.type != 'choices') break;
+        case 'shop':
+        case 'selectShop':
+        case 'switchs':
+        case 'settings':
+        case 'syncSave':
+        case 'syncSelect':
+        case 'localSaveSelect':
+        case 'storageRemove':
+        case 'replay':
+        case 'gameInfo':
+            this._onMoveChoices(x, y);
+            return true;
+        default:
+            break;
+    }
+    return false;
+}
+
 actions.prototype._sys_onmove = function (x, y) {
     if ((core.status.stepPostfix || []).length > 0) {
         var pos = {'x': x, 'y': y};
@@ -509,8 +537,10 @@ actions.prototype._sys_onmove = function (x, y) {
 }
 
 ////// 当点击（触摸）事件放开时 //////
-actions.prototype.onup = function () {
-    this.doRegisteredAction('onup');
+actions.prototype.onup = function (loc) {
+    var x = parseInt(loc.x / loc.size), y = parseInt(loc.y / loc.size);
+    var px = parseInt(loc.x / core.domStyle.scale), py = parseInt(loc.y / core.domStyle.scale);
+    this.doRegisteredAction('onup', x, y, px, py);
 }
 
 actions.prototype._sys_onup_paint = function () {
@@ -567,12 +597,12 @@ actions.prototype._getClickLoc = function (x, y) {
     size = size * core.domStyle.scale;
 
     if (core.domStyle.isVertical) {
-        statusBar.x = 0;
+        statusBar.x = 3;
         statusBar.y = core.dom.statusBar.offsetHeight + 3;
     }
     else {
         statusBar.x = core.dom.statusBar.offsetWidth + 3;
-        statusBar.y = 0;
+        statusBar.y = 3;
     }
 
     var left = core.dom.gameGroup.offsetLeft + statusBar.x;
@@ -584,7 +614,7 @@ actions.prototype._getClickLoc = function (x, y) {
 ////// 具体点击屏幕上(x,y)点时，执行的操作 //////
 actions.prototype.onclick = function (x, y, stepPostfix) {
     // console.log("Click: (" + x + "," + y + ")");
-    this.doRegisteredAction('onclick', x, y, stepPostfix || []);
+    return this.doRegisteredAction('onclick', x, y, stepPostfix || []);
 }
 
 actions.prototype._sys_onclick_lockControl = function (x, y) {
@@ -726,6 +756,7 @@ actions.prototype._sys_onmousewheel = function (direct) {
         var keycode = direct == 1 ? 33 : 34;
         core.setFlag('keycode', keycode);
         core.status.route.push("input:" + keycode);
+        core.events.__action_wait_afterGet(core.status.event.data.current);
         core.doAction();
         return;
     }
@@ -815,6 +846,19 @@ actions.prototype._sys_longClick = function (x, y, fromEvent) {
     return false;
 }
 
+actions.prototype.onStatusBarClick = function (e) {
+    if (!core.isPlaying()) return false;
+    var left = core.dom.gameGroup.offsetLeft + 3;
+    var top = core.dom.gameGroup.offsetTop + 3;
+    var px = parseInt((e.clientX - left) / core.domStyle.scale), py = parseInt((e.clientY - top) / core.domStyle.scale);
+    return this.doRegisteredAction('onStatusBarClick', px, py);
+}
+
+actions.prototype._sys_onStatusBarClick = function (px, py) {
+    if (this.actionsdata.onStatusBarClick)
+        return this.actionsdata.onStatusBarClick(px, py);
+}
+
 /////////////////// 在某个界面时的按键点击效果 ///////////////////
 
 // 数字键快速选择选项
@@ -823,6 +867,13 @@ actions.prototype._selectChoices = function (length, keycode, callback) {
     if (keycode == 13 || keycode == 32 || keycode == 67) {
         callback.apply(this, [this.HSIZE, topIndex + core.status.event.selection]);
     }
+    //左右方向键调整 音量 行走速度
+    if(core.status.event.id == "switchs" && (core.status.event.selection == 2 || core.status.event.selection == 3))
+    {
+        if (keycode == 37) callback.apply(this, [this.HSIZE - 2, topIndex + core.status.event.selection]);
+        if (keycode == 39) callback.apply(this, [this.HSIZE + 2, topIndex + core.status.event.selection]);
+    }
+
     if (keycode >= 49 && keycode <= 57) {
         var index = keycode - 49;
         if (index < length) {
@@ -839,6 +890,21 @@ actions.prototype._keyDownChoices = function (keycode) {
     }
     if (keycode == 40) {
         core.status.event.selection++;
+        core.ui.drawChoices(core.status.event.ui.text, core.status.event.ui.choices);
+    }
+}
+
+// 移动光标
+actions.prototype._onMoveChoices = function (x, y) {
+    if (x < this.CHOICES_LEFT || x > this.CHOICES_RIGHT) return;
+    var choices = core.status.event.ui.choices;
+
+    var topIndex = this.HSIZE - parseInt((choices.length - 1) / 2) + (core.status.event.ui.offset || 0);
+
+    if (y >= topIndex && y < topIndex + choices.length) {
+        var selection = y - topIndex;
+        if (selection == core.status.event.selection) return;
+        core.status.event.selection = selection;
         core.ui.drawChoices(core.status.event.ui.text, core.status.event.ui.choices);
     }
 }
@@ -978,6 +1044,7 @@ actions.prototype._keyUpAction = function (keycode) {
         core.setFlag('type', 0);
         core.setFlag('keycode', keycode);
         core.status.route.push("input:" + keycode);
+        core.events.__action_wait_afterGet(core.status.event.data.current);
         core.doAction();
         return;
     }
@@ -1910,11 +1977,14 @@ actions.prototype._keyUpSL = function (keycode) {
 
 ////// 系统设置界面时的点击操作 //////
 actions.prototype._clickSwitchs = function (x, y) {
-    if (x < this.CHOICES_LEFT || x > this.CHOICES_RIGHT) return;
     var choices = core.status.event.ui.choices;
     var topIndex = this.HSIZE - parseInt((choices.length - 1) / 2) + (core.status.event.ui.offset || 0);
-    if (y >= topIndex && y < topIndex + choices.length) {
-        var selection = y - topIndex;
+    var selection = y - topIndex;
+    if (x < this.CHOICES_LEFT || x > this.CHOICES_RIGHT) {
+        if (selection != 2 && selection != 3) return;
+        if (x != this.HSIZE - 2 && x != this.HSIZE + 2) return;
+    }
+    if (selection >= 0 && selection < choices.length) {
         core.status.event.selection = selection;
         switch (selection) {
             case 0:
@@ -1922,18 +1992,24 @@ actions.prototype._clickSwitchs = function (x, y) {
             case 1:
                 return this._clickSwitchs_sound();
             case 2:
-                return this._clickSwitchs_moveSpeed();
+                if (x == this.HSIZE - 2) return this._clickSwitchs_userVolume(-1);
+                if (x == this.HSIZE + 2) return this._clickSwitchs_userVolume(1);
+                return;
             case 3:
-                return this._clickSwitchs_displayEnemyDamage();
+                if (x == this.HSIZE - 2) return this._clickSwitchs_moveSpeed(-10);
+                if (x == this.HSIZE + 2) return this._clickSwitchs_moveSpeed(10);
+                return;
             case 4:
-                return this._clickSwitchs_displayCritical();
+                return this._clickSwitchs_displayEnemyDamage();
             case 5:
-                return this._clickSwitchs_displayExtraDamage();
+                return this._clickSwitchs_displayCritical();
             case 6:
-                return this._clickSwitchs_localForage();
+                return this._clickSwitchs_displayExtraDamage();
             case 7:
-                return this._clickSwitchs_clickMove();
+                return this._clickSwitchs_localForage();
             case 8:
+                return this._clickSwitchs_clickMove();
+            case 9:
                 core.status.event.selection = 0;
                 core.ui.drawSettings();
                 break;
@@ -1952,14 +2028,20 @@ actions.prototype._clickSwitchs_sound = function () {
     core.ui.drawSwitchs();
 }
 
-actions.prototype._clickSwitchs_moveSpeed = function () {
-    core.myprompt("请输入行走速度（每走一步的时间，单位毫秒，默认100）", core.values.moveSpeed, function (value) {
-        value = parseInt(value) || core.values.moveSpeed;
-        value = core.clamp(value, 10, 500);
-        core.values.moveSpeed = value;
-        core.setLocalStorage("moveSpeed", value);
-        core.ui.drawSwitchs();
-    });
+actions.prototype._clickSwitchs_userVolume = function (delta) {
+    var value = Math.round(Math.sqrt(100 * core.musicStatus.userVolume));
+    core.musicStatus.userVolume = core.clamp(Math.pow(value + delta, 2) / 100, 0, 1);
+    //audioContext 音效 不受designVolume 影响
+    if (core.musicStatus.gainNode != null) core.musicStatus.gainNode.gain.value = core.musicStatus.userVolume;
+    if (core.musicStatus.playingBgm) core.material.bgms[core.musicStatus.playingBgm].volume = core.musicStatus.userVolume * core.musicStatus.designVolume;
+    core.setLocalStorage('userVolume', core.musicStatus.userVolume);
+    core.ui.drawSwitchs();
+}
+
+actions.prototype._clickSwitchs_moveSpeed = function (delta) {
+    core.values.moveSpeed = core.clamp(core.values.moveSpeed + delta, 50, 200);
+    core.setLocalStorage("moveSpeed", core.values.moveSpeed);
+    core.ui.drawSwitchs();
 }
 
 actions.prototype._clickSwitchs_displayEnemyDamage = function () {
@@ -2103,7 +2185,7 @@ actions.prototype._clickSyncSave_readFile = function () {
         if (obj.version != core.firstData.version) return alert("游戏版本不一致！");
         if (!obj.data) return alert("无效的存档！");
         core.control._syncLoad_write(obj.data);
-    });
+    }, null, ".h5save");
 }
 
 actions.prototype._clickSyncSave_replay = function () {
@@ -2626,7 +2708,6 @@ actions.prototype.exitPaint = function () {
     core.ui.closePanel();
     core.statusBar.image.keyboard.style.opacity = 1;
     core.statusBar.image.shop.style.opacity = 1;
-    core.updateStatusBar();
     core.drawTip("退出绘图模式");
 }
 

@@ -22,6 +22,7 @@ control.prototype._init = function () {
     this.registerAnimationFrame("animate", true, this._animationFrame_animate);
     this.registerAnimationFrame("heroMoving", true, this._animationFrame_heroMoving);
     this.registerAnimationFrame("weather", true, this._animationFrame_weather);
+    this.registerAnimationFrame("tips", true, this._animateFrame_tips);
     this.registerAnimationFrame("parallelDo", false, this._animationFrame_parallelDo);
     this.registerAnimationFrame("checkConsoleOpened", true, this._animationFrame_checkConsoleOpened);
     // --- 注册系统的replay
@@ -168,7 +169,11 @@ control.prototype._animationFrame_animate = function (timestamp) {
         return obj.index < obj.animate.frames.length;
     });
     core.status.animateObjs.forEach(function (obj) {
-        core.maps._drawAnimateFrame(obj.animate, obj.centerX, obj.centerY, obj.index++);
+        if (obj.hero) {
+            core.maps._drawAnimateFrame(obj.animate, core.status.heroCenter.px, core.status.heroCenter.py, obj.index++);
+        } else {
+            core.maps._drawAnimateFrame(obj.animate, obj.centerX, obj.centerY, obj.index++);
+        }
     });
     core.animateFrame.animateTime = timestamp;
 }
@@ -276,6 +281,40 @@ control.prototype._animationFrame_weather_fog = function () {
         });
         core.setAlpha('weather',1);
     }
+}
+
+control.prototype._animateFrame_tips = function (timestamp) {
+    var tips = core.animateFrame.tips;
+    if (timestamp - tips.time <= 30) return;
+    var delta = timestamp - tips.time;
+    tips.time = timestamp;
+    if (tips.list.length == 0) return;
+
+    var currentOffset = Math.max(tips.offset - 5, 0), firstOffset = null;
+    var currList = [];
+    core.setFont('data', "16px Arial");
+    core.setTextAlign('data', 'left');
+    core.clearMap('data', 0, 0, this.PIXEL, tips.lastSize * 50);
+    tips.lastLength = tips.list.length;
+
+    while (tips.list.length > 0) {
+        var one = tips.list.shift();
+        core.ui._drawTip_drawOne(one, currentOffset);
+        if (one.stage == 1) {
+            one.opacity += 0.05;
+            if (one.opacity >= 0.7) one.stage = 2;
+        } else if (one.stage == 2) {
+            one.time += delta;
+            if (one.time >= 2000) one.stage = 3;
+        } else one.opacity -= 0.05;
+        if (one.opacity > 0) {
+            currList.push(one);
+            if (firstOffset == null) firstOffset = currentOffset;
+        }
+        currentOffset += 50;
+    }
+    tips.list = currList;
+    tips.offset = firstOffset || 0;
 }
 
 control.prototype._animationFrame_parallelDo = function (timestamp) {
@@ -771,12 +810,16 @@ control.prototype.drawHero = function (status, offset) {
     core.bigmap.offsetY = core.clamp((y - core.__HALF_SIZE__) * 32 + offsetY, 0, 32*core.bigmap.height-core.__PIXELS__);
     core.clearAutomaticRouteNode(x+dx, y+dy);
     core.clearMap('hero');
+    core.status.heroCenter.px = 32 * x + offsetX + 16;
+    core.status.heroCenter.py = 32 * y + offsetY + 32 - core.material.icons.hero.height / 2;
 
-    this._drawHero_getDrawObjs(direction, x, y, status, offset).forEach(function (block) {
-        core.drawImage('hero', block.img, block.heroIcon[block.status]*block.width,
-            block.heroIcon.loc * block.height, block.width, block.height,
-            block.posx+(32-block.width)/2, block.posy+32-block.height, block.width, block.height);
-    });
+    if (!core.hasFlag('hideHero')) {
+        this._drawHero_getDrawObjs(direction, x, y, status, offset).forEach(function (block) {
+            core.drawImage('hero', block.img, block.heroIcon[block.status]*block.width,
+                block.heroIcon.loc * block.height, block.width, block.height,
+                block.posx+(32-block.width)/2, block.posy+32-block.height, block.width, block.height);
+        });
+    }
 
     core.control.updateViewport();
     core.setGameCanvasTranslate('hero', 0, 0);
@@ -815,6 +858,7 @@ control.prototype._drawHero_getDrawObjs = function (direction, x, y, status, off
 
 ////// 设置画布偏移
 control.prototype.setGameCanvasTranslate = function(canvas,x,y){
+    return;
     var c=core.dom.gameCanvas[canvas];
     x=x*core.domStyle.scale;
     y=y*core.domStyle.scale;
@@ -959,7 +1003,7 @@ control.prototype.checkBlock = function () {
     if (damage) {
         core.status.hero.hp -= damage;
         core.drawTip("受到"+(core.status.checkBlock.type[loc]||"伤害")+damage+"点");
-        core.drawAnimate("zone", x, y);
+        core.drawHeroAnimate("zone");
         this._checkBlock_disableQuickShop();
         core.status.hero.statistics.extraDamage += damage;
         if (core.status.hero.hp <= 0) {
@@ -1022,7 +1066,7 @@ control.prototype.updateDamage = function (floorId, ctx) {
     }
 
     // 没有怪物手册
-    if (!core.hasItem('book')) return;
+    if (!core.hasItem('book') && main.mode!='editor') return;
     core.setFont(ctx, "bold 11px Arial");
     this._updateDamage_damage(floorId, ctx);
     this._updateDamage_extraDamage(floorId, ctx, refreshCheckBlock);
@@ -1085,7 +1129,7 @@ control.prototype.chooseReplayFile = function () {
             return;
         }
         _replay();
-    });
+    }, null, ".h5route");
 }
 
 ////// 开始播放 //////
@@ -1389,9 +1433,7 @@ control.prototype.__replay_getTimeout = function () {
 
 control.prototype._replayAction_move = function (action) {
     if (["up","down","left","right"].indexOf(action)<0) return false;
-    core.moveHero(action, function () {
-        setTimeout(core.replay);
-    });
+    core.moveHero(action, core.replay);
     return true;
 }
 
@@ -1407,11 +1449,11 @@ control.prototype._replayAction_item = function (action) {
     var constants = Object.keys(core.status.hero.items.constants).sort();
     var index, per = core.__SIZE__-1;
     if ((index=tools.indexOf(itemId))>=0) {
-        core.status.event.data = {"toolsPage": Math.floor(index/per)+1, "constantsPage":1};
+        core.status.event.data = {"toolsPage": ~~(index/per)+1, "constantsPage":1};
         index = index%per;
     }
     else if ((index=constants.indexOf(itemId))>=0) {
-        core.status.event.data = {"toolsPage": 1, "constantsPage": Math.floor(index/per)+1};
+        core.status.event.data = {"toolsPage": 1, "constantsPage": ~~(index/per)+1};
         index = index%per+per;
     }
     if (index<0) return false;
@@ -1430,7 +1472,11 @@ control.prototype._replayAction_equip = function (action) {
     var index = ownEquipment.indexOf(equipId), per = core.__SIZE__-1;
     if (index<0) return false;
     core.status.route.push(action);
-    core.status.event.data = {"page":Math.floor(index/per)+1, "selectId":null};
+    if (core.material.items[equipId].hideInReplay) {
+        core.loadEquip(equipId, core.replay);
+        return true;
+    }
+    core.status.event.data = {"page":~~(index/per)+1, "selectId":null};
     index = index%per+per;
     core.ui.drawEquipbox(index);
     setTimeout(function () {
@@ -1473,8 +1519,8 @@ control.prototype._replayAction_shop = function (action) {
     if (selections.length == 0) return false;
     var shop=core.status.shops[shopId];
     if (!shop || !shop.visited) return false;
-    // --- 判定commonEvent
-    if (shop.commonEvent) {
+    // --- 判定commonEvent或item
+    if (shop.commonEvent || shop.item) {
         core.openShop(shopId, false);
         setTimeout(core.replay);
         return true;
@@ -1556,7 +1602,13 @@ control.prototype.autosave = function (removeLast) {
     }
     if (core.status.event.id == 'action') // 事件中的自动存档
         core.setFlag("__events__", core.clone(core.status.event.data));
-    core.saves.autosave.data = core.saveData();
+    if (core.saves.autosave.data == null) {
+        core.saves.autosave.data = [];
+    }
+    core.saves.autosave.data.push(core.saveData());
+    if (core.saves.autosave.data.length > core.saves.autosave.max) {
+        core.saves.autosave.data.shift();
+    }
     core.saves.autosave.updated = true;
     core.saves.ids[0] = true;
     core.removeFlag("__events__");
@@ -1570,9 +1622,12 @@ control.prototype.autosave = function (removeLast) {
 control.prototype.checkAutosave = function () {
     if (!core.animateFrame || !core.saves || !core.saves.autosave) return;
     core.setLocalStorage('totalTime', core.animateFrame.totalTime);
-    if (core.saves.autosave.data == null || !core.saves.autosave.updated) return;
-    core.saves.autosave.updated = false;
-    core.setLocalForage("autoSave", core.saves.autosave.data);
+    var autosave = core.saves.autosave;
+    if (autosave.data == null || !autosave.updated || !autosave.storage) return;
+    autosave.updated = false;
+    if (autosave.data.length >= 1) {
+        core.setLocalForage("autoSave", autosave.data[autosave.data.length - 1]);
+    }
 }
 
 ////// 实际进行存读档事件 //////
@@ -1612,11 +1667,21 @@ control.prototype._doSL_save = function (id) {
 
 control.prototype._doSL_load = function (id, callback) {
     if (id == 'autoSave' && core.saves.autosave.data != null) {
-        callback(id, core.clone(core.saves.autosave.data))
+        var data = core.saves.autosave.data.pop();
+        if (core.saves.autosave.data.length == 0) {
+            core.saves.autosave.data.push(core.clone(data));
+        }
+        callback(id, data);
     }
     else {
         core.getLocalForage(id=='autoSave'?id:"save"+id, null, function(data) {
-            if (id == 'autoSave') core.saves.autosave.data = core.clone(data);
+            if (id == 'autoSave' && data != null) {
+                core.saves.autosave.data = data;
+                if (!(core.saves.autosave.data instanceof Array)) {
+                    core.saves.autosave.data = [core.saves.autosave.data];
+                }
+                return core.control._doSL_load(id, callback);
+            }
             callback(id, data);
         }, function(err) {
             main.log(err);
@@ -1796,10 +1861,16 @@ control.prototype.getSave = function (index, callback) {
     if (index == 0) {
         // --- 自动存档先从缓存中获取
         if (core.saves.autosave.data != null)
-            callback(core.clone(core.saves.autosave.data));
+            callback(core.saves.autosave.data);
         else {
             core.getLocalForage("autoSave", null, function(data) {
-                callback(data);
+                if (data != null) {
+                    core.saves.autosave.data = data;
+                    if (!(core.saves.autosave.data instanceof Array)) {
+                        core.saves.autosave.data = [core.saves.autosave.data];
+                    }
+                }
+                callback(core.saves.autosave.data);
             }, function(err) {
                 main.log(err);
                 callback(null);
@@ -1936,8 +2007,8 @@ control.prototype.getStatus = function (name) {
 ////// 从status中获得属性，如果不存在则从勇士属性中获取 //////
 control.prototype.getStatusOrDefault = function (status, name) {
     if (status && name in status)
-        return Math.floor(status[name]);
-    return Math.floor(this.getStatus(name));
+        return ~~(status[name]);
+    return ~~(this.getStatus(name));
 }
 
 ////// 获得勇士实际属性（增幅后的） //////
@@ -1947,7 +2018,7 @@ control.prototype.getRealStatus = function (name) {
 
 ////// 从status中获得实际属性（增幅后的），如果不存在则从勇士属性中获取 //////
 control.prototype.getRealStatusOrDefault = function (status, name) {
-    return Math.floor(this.getStatusOrDefault(status, name) * this.getBuff(name));
+    return ~~(this.getStatusOrDefault(status, name) * this.getBuff(name));
 }
 
 ////// 设置某个属性的增幅值 //////
@@ -2001,12 +2072,14 @@ control.prototype.getLvName = function (lv) {
 control.prototype.setFlag = function(name, value) {
     if (value == null) return this.removeFlag(name);
     if (!core.status.hero) return;
+    MessageManager.send('update','flag', name);
     core.status.hero.flags[name]=value;
 }
 
 ////// 增加某个flag数值 //////
 control.prototype.addFlag = function(name, value) {
     if (!core.status.hero) return;
+    MessageManager.send('update','flag', name);
     core.setFlag(name, core.getFlag(name, 0) + value);
 }
 
@@ -2025,6 +2098,7 @@ control.prototype.hasFlag = function(name) {
 ////// 删除某个自定义变量或flag //////
 control.prototype.removeFlag = function(name) {
     if (!core.status.hero) return;
+    MessageManager.send('update','flag', name);
     delete core.status.hero.flags[name];
 }
 
@@ -2134,6 +2208,7 @@ control.prototype.setCurtain = function(color, time, callback) {
 control.prototype._setCurtain_animate = function (nowColor, color, time, callback) {
     time /= Math.max(core.status.replay.speed, 1)
     var per_time = 10, step = parseInt(time / per_time);
+    if (step <= 0) step = 1;
     var animate = setInterval(function() {
         nowColor = [
             (nowColor[0]*(step-1)+color[0])/step,
@@ -2211,7 +2286,7 @@ control.prototype._playBgm_play = function (bgm, startTime) {
     // 缓存BGM
     core.loader.loadBgm(bgm);
     // 播放当前BGM
-    core.material.bgms[bgm].volume = core.musicStatus.volume;
+    core.material.bgms[bgm].volume = core.musicStatus.userVolume * core.musicStatus.designVolume;
     core.material.bgms[bgm].currentTime = startTime || 0;
     core.material.bgms[bgm].play();
     core.musicStatus.playingBgm = bgm;
@@ -2248,6 +2323,7 @@ control.prototype.resumeBgm = function () {
 }
 
 control.prototype.setMusicBtn = function () {
+    return;
     if (core.musicStatus.bgmStatus)
         core.dom.musicBtn.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAZCAMAAADzN3VRAAABWVBMVEX///9iYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmL///8AAAC5ubn+/v6xsbEtLS0MDAxmZmZoaGhvb2/c3Nzd3d38/Pz9/f0oKCgpKSl0dHR1dXW6urrb29v7+/v09PTv7+/39/cgICACAgImJibh4eGFhYWGhoaHh4eOjo5paWm7u7vDw8PMzMwyMjI7OztAQEDe3t5FRUVMTEzj4+Pl5eXm5ubp6enr6+tcXFzi4uL19fVeXl74+PgjIyNkZGQGBgaSkpKYmJiampqenp4DAwMwMDBnZ2cICAivr68eHh63t7cLCwsSEhLw8PBhYWEUFBQVFRXNzc3Pz8/Z2dna2toaGhqkpKSlpaWpqamrq6tFOUNAAAAAc3RSTlMAAwQFBhUWGxwkJSYyO0dISVBRUmpvj5CSk5SVoaOlpqiysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKyA0IuUgAAAVdJREFUeF5NkVVbw0AQRTcQrLR4IIEGcidJoaUuQHF3d3d3+P/CkuxCzss8nG++mbnDBJXhNt2CpbeFK1kQpSEKidlc8S9qdATRa6UIdQMoxEpDA0Ov3wUAPfW+qLWACydNv9zMrzkJwPK6FB3oHyOfXfuNxvoBQ+GmBYinhHB77TmiVBxoYUw1AYcEq332AS8OYKosAuTT0nza9uU2USYPRJgGxEiSOFywJ3mNARozgBJJzkfLvfu8JgGDWcC9FEsjWzR+y80gYDEAA8QZ3N6kmP1Fs3fEASB7pob7Hh+Wz5L0ci17Or05J7bH6B6dZv05XWK3rG+myV05Ert592Qo55sPuoIr7hEZHHtieIPWy0RU9DLwc3Mnck/vi8/E8XNrDWQtEVnL/ySKMrv0jPwPp870fprcyYifmiEmqGpHkI5q9ofSFIUk2qiwIGpEMyxYhhZRRcMPz89RJ2s9W8wAAAAASUVORK5CYII=";
     else
@@ -2284,7 +2360,7 @@ control.prototype.playSound = function (sound) {
             core.musicStatus.playingSounds[id] = source;
         }
         else {
-            core.material.sounds[sound].volume = core.musicStatus.volume;
+            core.material.sounds[sound].volume = core.musicStatus.userVolume;
             core.material.sounds[sound].play();
         }
     }
@@ -2328,9 +2404,10 @@ control.prototype.clearStatusBar = function() {
 }
 
 ////// 更新状态栏 //////
-control.prototype.updateStatusBar = function () {
+control.prototype.updateStatusBar = function (doNotCheckAutoEvents) {
     if (!core.isPlaying()) return;
     this.controldata.updateStatusBar();
+    if (!doNotCheckAutoEvents) core.checkAutoEvents();
     this._updateStatusBar_setToolboxIcon();
 }
 
@@ -2411,7 +2488,7 @@ control.prototype.updateHeroIcon = function (name) {
     // 全身图
     var w = core.material.icons.hero.width || 32;
     var h = core.material.icons.hero.height || 48;
-    var ratio = Math.max(w / h, 1), width = 32 * ratio, left = 16 - width/2;
+    var ratio = Math.min(w / h, 1), width = 32 * ratio, left = 16 - width/2;
 
     var canvas = document.createElement("canvas");
     var context = canvas.getContext("2d");
@@ -2580,7 +2657,7 @@ control.prototype._doResize = function (obj) {
 control.prototype.resize = function() {
     if (main.mode=='editor')return;
     var clientWidth = main.dom.body.clientWidth, clientHeight = main.dom.body.clientHeight;
-    var CANVAS_WIDTH = core.__PIXELS__ + 6, BAR_WIDTH = Math.round(core.__PIXELS__ * 0.31) + 3;
+    var CANVAS_WIDTH = core.__PIXELS__ + 6, BAR_WIDTH = Math.round(core.__PIXELS__ * 0.382) + 3;//! 改为黄金分割比 0.31 -> 0.382
 
     if (clientWidth >= CANVAS_WIDTH + BAR_WIDTH || (clientWidth > clientHeight && clientHeight < CANVAS_WIDTH)) {
         // 横屏
@@ -2613,7 +2690,7 @@ control.prototype.resize = function() {
         statusDisplayArr: statusDisplayArr,
         count: count,
         col: col,
-        statusBarHeightInVertical: core.domStyle.isVertical ? (32 * col + 6) * core.domStyle.scale + 6 : 0,
+        statusBarHeightInVertical: core.domStyle.isVertical ? (32 * col + 16) * core.domStyle.scale + 6 : 0,// 6->16
         toolbarHeightInVertical: core.domStyle.isVertical ? 44 * core.domStyle.scale + 6 : 0,
         is15x15: core.__SIZE__ == 15
     };
@@ -2652,6 +2729,12 @@ control.prototype._resize_gameGroup = function (obj) {
         core.dom.musicBtn.style.right = (obj.clientWidth - totalWidth) / 2 + "px";
         core.dom.musicBtn.style.bottom = (obj.clientHeight - totalHeight) / 2 - 27 + "px";
     }
+    // startbox
+    core.dom.startBackground.width = totalWidth;
+    core.dom.startBackground.height = totalHeight;
+    core.dom.startBackground.style.width = totalWidth + 'px';
+    core.dom.startBackground.style.height = totalHeight + 'px';
+
 }
 
 control.prototype._resize_canvas = function (obj) {

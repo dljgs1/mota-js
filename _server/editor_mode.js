@@ -14,6 +14,7 @@ editor_mode = function (editor) {
 
             'commonevent': 'left9',
             'plugins': 'left10',
+            'specials': 'left11',
         }
         this._ids = {}
         this.dom = {}
@@ -21,7 +22,7 @@ editor_mode = function (editor) {
         this.mode = '';
         this.info = {};
         this.appendPic = {};
-        this.doubleClickMode='change';
+        this.doubleClickMode = 'change';
     }
 
     editor_mode.prototype.init = function (callback) {
@@ -35,7 +36,44 @@ editor_mode = function (editor) {
             editor_mode._ids[editor_mode.ids[v]] = v;
         });
 
+        //// specials
+        var select = document.getElementById('selectSpecialId');
+        select.onchange = function(){
+            var v =this.options[this.selectedIndex].value;
+            editor.mode.index = ~~v;
+            editor_mode.change(editor.dom.editModeSelect.value);
+        }
+        for(var i in specials_90f36752_8815_4be8_b32b_d7fad1d0542e){
+            var v = document.createElement('option');
+            v.value = i;
+            v.innerHTML = i + ':' +specials_90f36752_8815_4be8_b32b_d7fad1d0542e[i].name;
+            select.appendChild(v);
+        }
+
         if (Boolean(callback)) callback();
+    }
+
+    editor_mode.prototype._flush_specials = function () {
+        var select = document.getElementById('selectSpecialId');
+        for(var i in select.options){
+            if(i in specials_90f36752_8815_4be8_b32b_d7fad1d0542e)
+                select.options[i].innerHTML = i+':'+specials_90f36752_8815_4be8_b32b_d7fad1d0542e[i].name;
+        }
+    }
+    editor_mode.prototype._add_specials = function () {
+        var select = document.getElementById('selectSpecialId');
+        var i = specials_90f36752_8815_4be8_b32b_d7fad1d0542e.length;
+        var v = document.createElement('option');
+        v.value = i;
+        v.innerHTML = i;
+        select.append(v);
+        specials_90f36752_8815_4be8_b32b_d7fad1d0542e.push(JSON.parse(JSON.stringify(editor.file.comment._data.specials_template)));
+        select.selectedIndex = i;
+        select.onchange();
+        editor.file.saveSetting('specials', [], function (err) {
+            if (err) printe(err);
+            else printf("添加成功");
+        })
     }
 
     editor_mode.prototype.indent = function (field) {
@@ -49,15 +87,16 @@ editor_mode = function (editor) {
         editor_mode.actionList.push(action);
     }
 
-    editor_mode.prototype.doActionList = function (mode, actionList) {
+    editor_mode.prototype.doActionList = function (mode, actionList, callback) {
         if (actionList.length == 0) return;
         printf('修改中...');
-        var cb=function(objs_){
+        var cb = function (objs_) {
             if (objs_.slice(-1)[0] != null) {
                 printe(objs_.slice(-1)[0]);
-                throw(objs_.slice(-1)[0])
+                throw (objs_.slice(-1)[0])
             }
-            ;printf('修改成功' + (data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d.firstData.name == 'template' ? '\n\n请注意：全塔属性的name尚未修改，请及时予以设置' : ''));
+            ; printf('修改成功' + (data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d.firstData.name == 'template' ? '\n\n请注意：全塔属性的name尚未修改，请及时予以设置' : ''));
+            if (callback) callback();
         }
         switch (mode) {
             case 'loc':
@@ -90,14 +129,17 @@ editor_mode = function (editor) {
             case 'plugins':
                 editor.file.editPlugins(actionList, cb);
                 break;
+            case 'specials':
+                editor.file.editSpecials(editor.mode.index || 0, actionList, cb);
+                break;
             default:
                 break;
         }
     }
 
-    editor_mode.prototype.onmode = function (mode) {
+    editor_mode.prototype.onmode = function (mode, callback) {
         if (editor_mode.mode != mode) {
-            if (mode === 'save') editor_mode.doActionList(editor_mode.mode, editor_mode.actionList);
+            if (mode === 'save') editor_mode.doActionList(editor_mode.mode, editor_mode.actionList, callback);
             if (editor_mode.mode === 'nextChange' && mode) editor_mode.showMode(mode);
             if (mode !== 'save') editor_mode.mode = mode;
             editor_mode.actionList = [];
@@ -109,13 +151,77 @@ editor_mode = function (editor) {
             editor_mode.dom[name].style = 'z-index:-1;opacity: 0;';
         }
         editor_mode.dom[mode].style = '';
-        editor_mode.doubleClickMode='change';
+        editor_mode.doubleClickMode = 'change';
         // clear
         editor.drawEventBlock();
         if (editor_mode[mode]) editor_mode[mode]();
-        document.getElementById('editModeSelect').value = mode;
+        editor.dom.editModeSelect.value = mode;
         if (!selectBox.isSelected()) tip.showHelp();
     }
+
+    editor_mode.prototype.change = function (value) {
+        editor_mode.onmode('nextChange');
+        editor_mode.onmode(value);
+        if (editor.isMobile) editor.showdataarea(false);
+    }
+
+
+    editor_mode.prototype.checkUnique = function (thiseval) {
+        if (!(thiseval instanceof Array)) return false;
+        var map = {};
+        for (var i = 0; i < thiseval.length; ++i) {
+            if (map[thiseval[i]]) {
+                alert("警告：存在重复定义！");
+                return false;
+            }
+            map[thiseval[i]] = true;
+        }
+        return true;
+    }
+
+    editor_mode.prototype.checkFloorIds = function (thiseval) {
+        if (!editor_mode.checkUnique(thiseval)) return false;
+        var oldvalue = data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d.main.floorIds;
+        fs.readdir('project/floors', function (err, data) {
+            if (err) {
+                printe(err);
+                throw Error(err);
+            }
+            var newfiles = thiseval.map(function (v) { return v + '.js' });
+            var notExist = '';
+            for (var name, ii = 0; name = newfiles[ii]; ii++) {
+                if (data.indexOf(name) === -1) notExist = name;
+            }
+            if (notExist) {
+                var discard = confirm('文件' + notExist + '不存在, 保存会导致工程无法打开, 是否放弃更改');
+                if (discard) {
+                    editor.file.editTower([['change', "['main']['floorIds']", oldvalue]], function (objs_) {//console.log(objs_);
+                        if (objs_.slice(-1)[0] != null) {
+                            printe(objs_.slice(-1)[0]);
+                            throw (objs_.slice(-1)[0])
+                        }
+                        ; printe('已放弃floorIds的修改，请F5进行刷新');
+                    });
+                }
+            }
+        });
+        return true
+    }
+
+    editor_mode.prototype.changeDoubleClickModeByButton = function (mode) {
+        ({
+            delete: function () {
+                printf('下一次双击表格的项删除，切换下拉菜单可取消；编辑后需刷新浏览器生效。');
+                editor_mode.doubleClickMode = mode;
+            },
+            add: function () {
+                printf('下一次双击表格的项则在同级添加新项，切换下拉菜单可取消；编辑后需刷新浏览器生效。');
+                editor_mode.doubleClickMode = mode;
+            }
+        }[mode])();
+    }
+
+    /////////////////////////////////////////////////////////////////////////////
 
     editor_mode.prototype.loc = function (callback) {
         //editor.pos={x: 0, y: 0};
@@ -140,7 +246,7 @@ editor_mode = function (editor) {
         //editor.info=editor.ids[editor.indexs[201]];
         if (!core.isset(editor.info)) return;
 
-        if (Object.keys(editor.info).length !== 0 && editor.info.idnum!=17) editor_mode.info = editor.info;//避免editor.info被清空导致无法获得是物品还是怪物
+        if (Object.keys(editor.info).length !== 0 && editor.info.idnum != 17) editor_mode.info = editor.info;//避免editor.info被清空导致无法获得是物品还是怪物
 
         if (!core.isset(editor_mode.info.id)) {
             // document.getElementById('table_a3f03d4c_55b8_4ef6_b362_b345783acd72').innerHTML = '';
@@ -232,7 +338,7 @@ editor_mode = function (editor) {
         tableinfo.listen(tableinfo.guids);
         if (Boolean(callback)) callback();
     }
-    
+
     editor_mode.prototype.plugins = function (callback) {
         var objs = [];
         editor.file.editPlugins([], function (objs_) {
@@ -246,11 +352,31 @@ editor_mode = function (editor) {
         if (Boolean(callback)) callback();
     }
 
-/////////////////////////////////////////////////////////////////////////////
+    editor_mode.prototype.specials = function (callback) {
+        var objs = [];
+        editor.file.editSpecials(editor.mode.index || 0, [], function (objs_) {
+            objs = objs_;
+            //console.log(objs_)
+        });
+        //只查询不修改时,内部实现不是异步的,所以可以这么写
+        var tableinfo = editor.table.objToTable(objs[0], objs[1]);
+        document.getElementById('table_specials_dljgs1').innerHTML = tableinfo.HTML;
+        tableinfo.listen(tableinfo.guids);
+        if (Boolean(callback)) callback();
+    }
+
+
+    /////////////////////////////////////////////////////////////////////////////
+
+    /**
+     * editor.dom.editModeSelect.onchange
+     */
+    editor_mode.prototype.editModeSelect_onchange = function () {
+        editor_mode.change(editor.dom.editModeSelect.value);
+    }
 
     editor_mode.prototype.listen = function (callback) {
-
-        // 移动至 editor_unsorted_2.js
+        // 移动至 editor_listen.js -> editor.constructor.prototype.mode_listen
     }
 
     var editor_mode = new editor_mode();

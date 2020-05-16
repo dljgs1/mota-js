@@ -46,6 +46,7 @@ ui.prototype._createUIEvent = function () {
 
 ////// 清除地图 //////
 ui.prototype.clearMap = function (name, x, y, width, height) {
+    return;
     if (name == 'all') {
         for (var m in core.canvas) {
             core.canvas[m].clearRect(0, 0, core.bigmap.width*32, core.bigmap.height*32);
@@ -353,7 +354,7 @@ ui.prototype.calWidth = function (name, text, font) {
 ////// 字符串自动换行的分割 //////
 ui.prototype.splitLines = function (name, text, maxWidth, font) {
     var ctx = this.getContextByName(name);
-    if (!ctx) return;
+    if (!ctx) return [text];
     if (font) core.setFont(name, font);
 
     var contents = [];
@@ -440,7 +441,7 @@ ui.prototype._uievent_drawIcon = function (data) {
 ui.prototype.closePanel = function () {
     this.clearUI();
     core.maps.generateGroundPattern();
-    core.updateStatusBar();
+    core.updateStatusBar(true);
     core.unLockControl();
     core.status.event.data = null;
     core.status.event.id = null;
@@ -458,66 +459,53 @@ ui.prototype.clearUI = function () {
 }
 
 ////// 左上角绘制一段提示 //////
-ui.prototype.drawTip = function (text, id) {
-    var textX, textY, width, height;
-    clearInterval(core.interval.tipAnimate);
-    core.setFont('data', "16px Arial");
-    core.setTextAlign('data', 'left');
+ui.prototype.drawTip = function (text, id, clear) {
+    this.clearTip();
+    var one = {
+        text: text,
+        textX: 21,
+        width: 26 + core.calWidth('data', text, "16px Arial"),
+        opacity: 0.1,
+        stage: 1,
+        time: 0
+    };
     if (id != null) {
         var info = core.getBlockInfo(id);
-        if (info == null || !info.image || info.height != 32) {
+        if (info == null || !info.image) {
             // 检查状态栏图标
             if (core.statusBar.icons[id] instanceof Image) {
-                id = {image: core.statusBar.icons[id], posX: 0, posY: 0};
+                id = {image: core.statusBar.icons[id], posX: 0, posY: 0, height: 32};
             }
-            else id = null;
+            else info = null;
         }
-        else id = info;
+        if (info != null) {
+            one.image = info.image;
+            one.posX = info.posX;
+            one.posY = info.posY;
+            one.height = info.height;
+            one.textX += 24;
+            one.width += 24;
+        }
     }
-    if (!id) {
-        textX = 16;
-        textY = 18;
-        width = textX + core.calWidth('data', text) + 16;
-        height = 42;
+    core.animateFrame.tips.list.push(one);
+    if (core.animateFrame.tips.list.length > 3) {
+        core.animateFrame.tips.list.shift();
     }
-    else {
-        textX = 44;
-        textY = 18;
-        width = textX + core.calWidth('data', text) + 8;
-        height = 42;
-    }
-    this._drawTip_animate(text, id, textX, textY, width, height);
 }
 
-ui.prototype._drawTip_animate = function (text, info, textX, textY, width, height) {
-    var alpha = 0, hide = false;
-    core.interval.tipAnimate = window.setInterval(function () {
-        if (hide) alpha -= 0.1;
-        else alpha += 0.1;
-        core.clearMap('data', 5, 5, core.ui.PIXEL, height);
-        core.setAlpha('data', alpha);
-        core.fillRect('data', 5, 5, width, height, '#000');
-        if (info)
-            core.drawImage('data', info.image, info.posX * 32, info.posY * 32, 32, 32, 10, 8, 32, 32);
-        core.fillText('data', text, textX + 5, textY + 15, '#fff');
-        core.setAlpha('data', 1);
-        if (alpha > 0.6 || alpha < 0) {
-            if (hide) {
-                core.clearMap('data', 5, 5, core.ui.PIXEL, height);
-                clearInterval(core.interval.tipAnimate);
-                return;
-            }
-            else {
-                if (!core.timeout.tipTimeout) {
-                    core.timeout.tipTimeout = window.setTimeout(function () {
-                        hide = true;
-                        core.timeout.tipTimeout = null;
-                    }, 750);
-                }
-                alpha = 0.6;
-            }
-        }
-    }, 30);
+ui.prototype._drawTip_drawOne = function (one, offset) {
+    core.setAlpha('data', one.opacity);
+    core.fillRect('data', 5, offset+ 5, one.width, 42, '#000000');
+    if (one.image)
+        core.drawImage('data', one.image, one.posX * 32, one.posY * one.height, 32, 32, 10, offset + 10, 32, 32);
+    core.fillText('data', one.text, one.textX, offset + 33, '#FFFFFF');
+    core.setAlpha('data', 1);
+}
+
+ui.prototype.clearTip = function () {
+    core.animateFrame.tips.list = [];
+    core.animateFrame.tips.offset = 0;
+    core.animateFrame.tips.lastSize = 0;
 }
 
 ////// 地图中间绘制一段文字 //////
@@ -600,7 +588,7 @@ ui.prototype._getTitleAndIcon = function (content) {
 
 ////// 正则处理 \b[up,xxx] 问题
 ui.prototype._getPosition = function (content) {
-    var pos = null, px = null, py = null;
+    var pos = null, px = null, py = null, noPeak = false;
     if (core.status.event.id=='action') {
         px = core.status.event.data.x;
         py = core.status.event.data.y;
@@ -627,6 +615,7 @@ ui.prototype._getPosition = function (content) {
                 } else{
                     px = parseInt(str[0]);
                     py = parseInt(str[1]);
+                    noPeak = core.getBlockId(px, py) == null;
                 }
             }
             if(pos=='hero' || pos=='null'){
@@ -634,7 +623,7 @@ ui.prototype._getPosition = function (content) {
             }
             return "";
         });
-    return {content: content, position: pos, px: px, py: py};
+    return {content: content, position: pos, px: px, py: py, noPeak: noPeak};
 }
 
 ////// 绘制选择光标
@@ -645,11 +634,8 @@ ui.prototype.drawWindowSelector = function(background, x, y, w, h) {
 }
 
 ui.prototype._uievent_drawSelector = function (data) {
-    if (data.image == null) {
-        if (main.mode != 'editor')
-            core.deleteCanvas('_uievent_selector');
-        return;
-    }
+    var canvasName = '_uievent_selector_' + (data.code || 0);
+    if (data.image == null) return core.deleteCanvas(canvasName);
 
     var background = data.image || core.status.textAttribute.background;
     if (typeof background != 'string') return;
@@ -661,7 +647,8 @@ ui.prototype._uievent_drawSelector = function (data) {
     }
     var z = 136;
     if (core.dymCanvas.uievent) z = (parseInt(core.dymCanvas.uievent.canvas.style.zIndex) || 135) + 1;
-    var ctx = core.createCanvas('_uievent_selector', x, y, w, h, z);
+    var ctx = core.createCanvas(canvasName, x, y, w, h, z);
+    ctx.canvas.classList.add('_uievent_selector');
     this._drawSelector(ctx, background, w, h);
 }
 
@@ -734,8 +721,8 @@ ui.prototype.drawWindowSkin = function(background, ctx, x, y, w, h, direction, p
 ////// 绘制一个背景图，可绘制 winskin 或纯色背景；支持小箭头绘制
 ui.prototype.drawBackground = function (left, top, right, bottom, posInfo) {
     posInfo = posInfo || {};
-    var px = posInfo.px == null ? null : posInfo.px * 32 - core.bigmap.offsetX;
-    var py = posInfo.py == null ? null : posInfo.py * 32 - core.bigmap.offsetY;
+    var px = posInfo.px == null || posInfo.noPeak ? null : posInfo.px * 32 - core.bigmap.offsetX;
+    var py = posInfo.py == null || posInfo.noPeak ? null : posInfo.py * 32 - core.bigmap.offsetY;
     var xoffset = posInfo.xoffset || 0, yoffset = posInfo.yoffset || 0;
     var background = core.status.textAttribute.background;
 
@@ -875,6 +862,7 @@ ui.prototype.drawTextContent = function (ctx, content, config) {
     config.fontSize = config.fontSize || textAttribute.textfont;
     config.lineHeight = config.lineHeight || (config.fontSize * 1.3);
     config.time = config.time || 0;
+    config.interval = config.interval == null ? (textAttribute.interval || 0) : config.interval;
 
     config.index = 0;
     config.currcolor = config.color;
@@ -980,7 +968,7 @@ ui.prototype._drawTextContent_drawChar = function (tempCtx, content, config, ch)
         tempCtx.font = this._buildFont(config.fontSize, config.bold, config.italic);
     }
     // 检查是不是自动换行
-    var charwidth = core.calWidth(tempCtx, ch);
+    var charwidth = core.calWidth(tempCtx, ch) + config.interval;
     if (config.maxWidth != null && config.offsetX + charwidth > config.maxWidth) {
         this._drawTextContent_newLine(tempCtx, config);
         config.index--;
@@ -1128,7 +1116,7 @@ ui.prototype.drawTextBox = function(content, showAll) {
     main.dom.next.style.borderRightColor = main.dom.next.style.borderBottomColor = core.arrayToRGB(textAttribute.text);
     main.dom.next.style.top = (vPos.bottom - 20) * core.domStyle.scale + "px";
     var left = (hPos.left + hPos.right) / 2;
-    if (pInfo.position == 'up' && pInfo.px != null && Math.abs(pInfo.px * 32 + 16 - left) < 50)
+    if (pInfo.position == 'up' && !pInfo.noPeak && pInfo.px != null && Math.abs(pInfo.px * 32 + 16 - left) < 50)
         left = hPos.right - 64;
     main.dom.next.style.left = left * core.domStyle.scale + "px";
     return config;
@@ -1298,7 +1286,7 @@ ui.prototype._drawScrollText_animate = function (ctx, time, callback) {
         if (currH < -height) {
             delete core.animateFrame.asyncId[animate];
             clearInterval(animate);
-            if (core.isset(callback)) callback();
+            if (callback) callback();
             return;
         }
         core.drawImage('ui', ctx.canvas, 0, currH);
@@ -1418,7 +1406,7 @@ ui.prototype._drawChoices_drawChoices = function (choices, isWindowSkin, hPos, v
         if (color instanceof Array) color = core.arrayToRGBA(color);
         core.setFillStyle('ui', color);
         var offset = this.HPIXEL;
-        if (core.isset(choices[i].icon)) {
+        if (choices[i].icon) {
             var iconInfo = this._getDrawableIconInfo(choices[i].icon), image = iconInfo[0], icon = iconInfo[1];
             if (image != null) {
                 core.drawImage('ui', image, 0, 32 * icon, 32, 32,
@@ -1510,7 +1498,10 @@ ui.prototype.drawSwitchs = function() {
     var choices = [
         "背景音乐： "+(core.musicStatus.bgmStatus ? "[ON]" : "[OFF]"),
         "背景音效： "+(core.musicStatus.soundStatus ? "[ON]" : "[OFF]"),
-        "行走速度： "+parseInt(core.values.moveSpeed),
+        //显示为 0~10 十挡
+        " <     音量：" + Math.round(Math.sqrt(100 * core.musicStatus.userVolume)) + "     > ",
+        //数值越大耗时越长
+        " <   步时：" + core.values.moveSpeed + "   > ",
         "怪物显伤： "+(core.flags.displayEnemyDamage ? "[ON]" : "[OFF]"),
         "临界显伤： "+(core.flags.displayCritical ? "[ON]" : "[OFF]"),
         "领域显伤： "+(core.flags.displayExtraDamage ? "[ON]" : "[OFF]"),
@@ -1711,13 +1702,13 @@ ui.prototype._drawBook_drawName = function (index, enemy, top, left, width) {
     core.setTextAlign('ui', 'center');
     if (enemy.specialText=='') {
         core.fillText('ui', enemy.name, left + width / 2,
-            top + 35, '#DDDDDD', this._buildFont(17, true));
+            top + 35, '#DDDDDD', this._buildFont(17, true), width);
     }
     else {
         core.fillText('ui', enemy.name, left + width / 2,
-            top + 28, '#DDDDDD', this._buildFont(17, true));
+            top + 28, '#DDDDDD', this._buildFont(17, true), width);
         core.fillText('ui', enemy.specialText, left + width / 2,
-            top + 50, '#FF6A6A', this._buildFont(15, true));
+            top + 50, '#FF6A6A', this._buildFont(15, true), width);
     }
 }
 
@@ -1809,7 +1800,7 @@ ui.prototype.drawBookDetail = function (index) {
     if (!enemy) return;
     var content = info[1].join("\n");
     core.status.event.id = 'book-detail';
-    clearInterval(core.interval.tipAnimate);
+    core.clearTip();
     core.clearMap('data');
 
     var left = 10, width = this.PIXEL - 2 * left, right = left + width;
@@ -1921,7 +1912,7 @@ ui.prototype._drawBookDetail_hatred = function (enemy, texts) {
 }
 
 ui.prototype._drawBookDetail_turnAndCriticals = function (enemy, floorId, texts) {
-    var damageInfo = core.getDamageInfo(enemy, null, null, null, floorId);
+    var damageInfo = core.getDamageInfo(enemy.id, null, null, null, floorId);// 不要传enemy 防止重复计算加防
     texts.push("战斗回合数："+((damageInfo||{}).turn||0));
     // 临界表
     var criticals = core.enemys.nextCriticals(enemy, 8, null, null, floorId).map(function (v) {
@@ -2037,7 +2028,7 @@ ui.prototype.drawShop = function (shopId) {
     for (var i=0;i<shop.choices.length;i++) {
         var choice = shop.choices[i];
         var text = core.replaceText(choice.text, need, times);
-        if (core.isset(choice.need))
+        if (choice.need != null)
             text += "（"+core.calValue(choice.need, null, null, times)+use+"）";
         choices.push({"text": text, "color":shop.visited?null:"#999999"});
     }
@@ -2051,7 +2042,7 @@ ui.prototype.drawMaps = function (index, x, y) {
     core.status.event.id = 'viewMaps';
     this.clearUI();
     if (index == null) return this._drawMaps_drawHint();
-    clearTimeout(core.interval.tipAnimate);
+    core.clearTip();
     core.status.checkBlock.cache = {};
     var data = this._drawMaps_buildData(index, x, y);
     core.drawThumbnail(data.floorId, null, {damage: data.damage},
@@ -2118,7 +2109,7 @@ ui.prototype._drawMaps_drawHint = function () {
 ui.prototype._drawMaps_buildData = function (index, x, y) {
     var damage = (core.status.event.data||{}).damage;
     var paint =  (core.status.event.data||{}).paint;
-    var all = (core.status.event.data||{}).all;
+    var all = (core.status.event.data||{all: true}).all;
     if (index.damage != null) damage=index.damage;
     if (index.paint != null) paint=index.paint;
     if (index.all != null) all=index.all;
@@ -2396,7 +2387,7 @@ ui.prototype._drawEquipbox_drawStatusChanged = function (info, y, equip, equipTy
         else { // 绘制文字
             this._drawEquipbox_drawStatusChanged_draw(text + " ", '#CCCCCC', obj);
         }
-        var nowValue = core.getStatus(name) * core.getBuff(name), newValue = (nowValue + compare[name]) * core.getBuff(name);
+        var nowValue = core.getStatus(name) * core.getBuff(name), newValue = (core.getStatus(name) + compare[name]) * core.getBuff(name);
         if (equip.equip.percentage) {
             var nowBuff = core.getBuff(name), newBuff = nowBuff + compare[name] / 100;
             nowValue = Math.floor(nowBuff * core.getStatus(name));
@@ -2512,9 +2503,9 @@ ui.prototype._drawSLPanel_loadSave = function(page, callback) {
         ids.push(id);
     }
     core.getSaves(ids, function (data) {
-        for (var i = 0; i < ids.length; ++i)
+        for (var i = 1; i < ids.length; ++i)
             core.status.event.ui[i] = data[i];
-        core.saves.autosave.data = data[0];
+        core.status.event.ui[0] = data[0] == null ? null : data[0][data[0].length-1];
         callback();
     });
 }
@@ -2533,6 +2524,10 @@ ui.prototype._drawSLPanel_drawRecord = function(title, data, x, y, size, cho, hi
         }, {
             ctx: 'ui', x: x-size/2, y: y+15, size: size, centerX: data.hero.loc.x, centerY: data.hero.loc.y
         });
+        if (core.isPlaying() && core.getFlag("hard") != data.hero.flags.hard) {
+            core.fillRect('ui', x-size/2, y+15, size, size, [0, 0, 0, 0.4], 2);
+            core.fillText('ui', data.hard, x, parseInt(y+22+size/2), core.dom.hard.style.color, this._buildFont(30,true));
+        }
         var v = core.formatBigNumber(data.hero.hp,true)+"/"+core.formatBigNumber(data.hero.atk,true)+"/"+core.formatBigNumber(data.hero.def,true);
         var v2 = "/"+core.formatBigNumber(data.hero.mdef,true);
         if (core.calWidth('ui', v + v2, this._buildFont(10, false)) <= size) v += v2;
@@ -2818,7 +2813,7 @@ ui.prototype._drawPaint_draw = function () {
 
     // 将已有的内容绘制到route上
     var value = core.paint[core.status.floorId];
-    if (core.isset(value)) value = lzw_decode(value).split(",");
+    if (value) value = lzw_decode(value).split(",");
     core.utils._decodeCanvas(value, 32*core.bigmap.width, 32*core.bigmap.height);
     core.drawImage('paint', core.bigmap.tempCanvas.canvas, 0, 0);
 
@@ -2879,7 +2874,7 @@ ui.prototype.drawHelp = function () {
 ////// canvas创建 //////
 ui.prototype.createCanvas = function (name, x, y, width, height, z) {
     // 如果画布已存在则直接调用
-    if (core.isset(core.dymCanvas[name])) {
+    if (core.dymCanvas[name]) {
         this.relocateCanvas(name, x, y);
         this.resizeCanvas(name, width, height);
         core.dymCanvas[name].canvas.style.zIndex = z;
@@ -2905,13 +2900,13 @@ ui.prototype.createCanvas = function (name, x, y, width, height, z) {
 
 ////// canvas重定位 //////
 ui.prototype.relocateCanvas = function (name, x, y) {
-    var ctx = core.dymCanvas[name];
-    if (!core.isset(ctx)) return null;
-    if (core.isset(x)) {
+    var ctx = core.getContextByName(name);
+    if (!ctx) return null;
+    if (x != null) {
         ctx.canvas.style.left = x * core.domStyle.scale + 'px';
         ctx.canvas.setAttribute("_left", x);
     }
-    if (core.isset(y)) {
+    if (y != null) {
         ctx.canvas.style.top = y * core.domStyle.scale + 'px';
         ctx.canvas.setAttribute("_top", y);
     }
@@ -2919,22 +2914,22 @@ ui.prototype.relocateCanvas = function (name, x, y) {
 }
 
 ////// canvas重置 //////
-ui.prototype.resizeCanvas = function (name, width, height) {
-    var ctx = core.dymCanvas[name];
-    if (!core.isset(ctx)) return null;
-    if (core.isset(width)) {
-        ctx.canvas.width = width;
+ui.prototype.resizeCanvas = function (name, width, height, styleOnly) {
+    var ctx = core.getContextByName(name);
+    if (!ctx) return null;
+    if (width != null) {
+        if (!styleOnly) ctx.canvas.width = width;
         ctx.canvas.style.width = width * core.domStyle.scale + 'px';
     }
-    if (core.isset(height)) {
-        ctx.canvas.height = height;
+    if (height != null) {
+        if (!styleOnly) ctx.canvas.height = height;
         ctx.canvas.style.height = height * core.domStyle.scale + 'px';
     }
     return ctx;
 }
 ////// canvas删除 //////
 ui.prototype.deleteCanvas = function (name) {
-    if (!core.isset(core.dymCanvas[name])) return null;
+    if (!core.dymCanvas[name]) return null;
     core.dom.gameDraw.removeChild(core.dymCanvas[name].canvas);
     delete core.dymCanvas[name];
 }

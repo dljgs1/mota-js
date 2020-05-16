@@ -40,6 +40,12 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 							"_string": true,
 							"_data": "道具在道具栏中显示的描述"
 						},
+						"extext": {
+							"_leaf": true,
+							"_type": "textarea",
+							"_string": true,
+							"_data": "道具的额外描述"
+						},
 						"equip": {
 							"_leaf": true,
 							"_type": "textarea",
@@ -66,6 +72,12 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 					"_string": true,
 					"_lint": true,
 					"_data": "即捡即用类物品在获得时提示的文字，仅对cls为items有效。"
+				},
+				"useItemEvent": {
+					"_leaf": true,
+					"_type": "event",
+					"_event": "item",
+					"_data": "碰触或使用本道具所执行的事件"
 				},
 				"useItemEffect": {
 					"_leaf": true,
@@ -102,6 +114,24 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 					"_type": "textarea",
 					"_string": true,
 					"_data": "名称"
+				},
+				"text": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_string": true,
+					"_data": "额外描述"
+				},
+				"race": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_string": true,
+					"_data": "种族",
+				},
+				"texture": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_string": true,
+					"_data": "纹理",
 				},
 				"displayIdInBook": {
 					"_leaf": true,
@@ -140,11 +170,39 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 					"_data": "加点"
 				},
 				"special": {
-					"_leaf": true,
-					"_type": "textarea",
-					"_range": "thiseval==null || thiseval instanceof Array || (thiseval==~~thiseval && thiseval>=0)",
-					"_data": "特殊属性\n\n0:无,1:先攻,2:魔攻,3:坚固,4:2连击,\n5:3连击,6:n连击,7:破甲,8:反击,9:净化,\n10:模仿,11:吸血,12:中毒,13:衰弱,14:诅咒,\n15:领域,16:夹击,17:仇恨,18:阻击,19:自爆,\n20:无敌,21:退化,22:固伤,23:重生,24:激光,25:光环\n\n多个属性例如用[1,4,11]表示先攻2连击吸血"
-				},
+					"_type": "object",
+                    "_range": "thiseval==null || thiseval instanceof Array",
+                    "_data": function(key){
+                        return{
+                            "_type": "object",
+                            "_data":{
+                                "id":{
+                                    "_leaf": true,
+                                    "_type": "select",
+									//"_range": "(thiseval==~~thiseval && thiseval>=0)",
+									"_select":{
+										"values":BattleManager.getSpecialIds(),
+										"views":BattleManager.getSpecials().map((v)=>{return BattleManager.getSpecials().indexOf(v)+':'+v.name}),
+									},
+                                    "_data": "怪物技能"
+                                },
+                                "value":{
+                                    "_leaf": true,
+                                    "_type": "textarea",
+                                    "_range": "thiseval==null || thiseval instanceof Array || typeof thiseval=='number'",
+                                    "_data": "属性值，多个值用array表示，单个用数字"
+                                },
+                            }
+                        }
+                    }
+                },
+				//"special": {
+				//	"_leaf": true,
+				//	"_type": "textarea",
+				//	"_range": "thiseval==null || thiseval instanceof Array || (thiseval==~~thiseval && thiseval>=0)",
+				//	"_data": "特殊属性\n\n0:无,1:先攻,2:魔攻,3:坚固,4:2连击,\n5:3连击,6:n连击,7:破甲,8:反击,9:净化,\n10:模仿,11:吸血,12:中毒,13:衰弱,14:诅咒,\n15:领域,16:夹击,17:仇恨,18:阻击,19:自爆,\n20:无敌,21:退化,22:固伤,23:重生,24:激光,25:光环\n26:支援,27:捕捉\n多个属性例如用[1,4,11]表示先攻2连击吸血"
+				//},
+				/*
 				"value": {
 					"_leaf": true,
 					"_type": "textarea",
@@ -161,12 +219,6 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 					"_type": "textarea",
 					"_range": "(thiseval==~~thiseval && thiseval>0)||thiseval==null",
 					"_data": "领域伤害的范围；不加默认为1"
-				},
-				"notBomb": {
-					"_leaf": true,
-					"_type": "checkbox",
-					"_bool": "bool",
-					"_data": "该怪物不可被炸"
 				},
 				"n": {
 					"_leaf": true,
@@ -197,7 +249,19 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 					"_type": "textarea",
 					"_range": "thiseval==~~thiseval||thiseval==null",
 					"_data": "战前扣血的点数"
-				}
+				},*/
+				"notBomb": {
+					"_leaf": true,
+					"_type": "checkbox",
+					"_bool": "bool",
+					"_data": "该怪物不可被炸"
+				},
+				"ghost": {
+					"_leaf": true,
+					"_type": "checkbox",
+					"_bool": "bool",
+					"_data": "该怪物是否为永久性幽灵"
+				},
 			}
 		},
 		"enemys_template": { 'name': '新敌人', 'hp': 0, 'atk': 0, 'def': 0, 'money': 0, 'experience': 0, 'point': 0, 'special': 0 },
@@ -258,11 +322,12 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 					},
 					"_data": "该图块是否不可通行；true代表不可通行，false代表可通行，null代表使用系统缺省值"
 				},
-				"canBreak": {
+				"script": {
 					"_leaf": true,
-					"_type": "checkbox",
-					"_bool": "bool",
-					"_data": "该图块是否可被破墙或地震"
+					"_type": "textarea",
+					"_string": true,
+					"_lint": true,
+					"_data": "触碰到该图块时自动执行的脚本内容；此脚本会在该点的触发器执行前执行"
 				},
 				"cannotOut": {
 					"_leaf": true,
@@ -275,6 +340,12 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 					"_type": "textarea",
 					"_range": "thiseval==null||(thiseval instanceof Array)",
 					"_data": "该图块的不可入方向\n可以在这里定义不能朝哪个方向进入该图块，可以达到悬崖之类的效果\n例如 [\"down\"] 代表不能从该图块的上方点朝向下进入此图块\n此值对背景层、事件层、前景层上的图块均有效"
+				},
+				"canBreak": {
+					"_leaf": true,
+					"_type": "checkbox",
+					"_bool": "bool",
+					"_data": "该图块是否可被破墙或地震"
 				},
 				"animate": {
 					"_leaf": true,
@@ -313,6 +384,11 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 							"_leaf": true,
 							"_type": "textarea",
 							"_data": "显示在状态栏中的层数"
+						},
+						"exInfo": {
+							"_leaf": true,
+							"_type": "textarea",
+							"_data": "额外信息"
 						},
 						"width": {
 							"_leaf": true,
@@ -435,6 +511,24 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 							"_event": "event",
 							"_data": "该点的可能事件列表，可以双击进入事件编辑器。"
 						},
+						"autoEvent": {
+							"_type": "object",
+							"_leaf": false,
+							"_action": function (args) {
+								args.vobj = args.vobj || {};
+								for (var ii = 0; ii < 2; ii++) {
+									args.vobj[ii] = args.vobj[ii] || null;
+								}
+							},
+							"_data": function (key) {
+								return {
+									"_leaf": true,
+									"_type": "event",
+									"_event": "autoEvent",
+									"_data": "自动事件页"
+								}
+							}
+						},
 						"changeFloor": {
 							"_leaf": true,
 							"_type": "event",
@@ -464,7 +558,7 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 							"_type": "textarea",
 							"_range": "thiseval==null||(thiseval instanceof Array)",
 							"_data": "该点不可通行的方向 \n 可以在这里定义该点不能前往哪个方向，可以达到悬崖之类的效果\n例如 [\"up\", \"left\"] 代表该点不能往上和左走"
-						}
+						},
 					}
 				}
 			}
@@ -496,7 +590,74 @@ var comment_c456ea59_6018_45ef_8bcc_211a24c627dc = {
 			"afterBattle": {},
 			"afterGetItem": {},
 			"afterOpenDoor": {},
+			"autoEvent": {},
 			"cannotMove": {}
-		}
+		},
+		// -------------------------------------------------------------------------------
+		"specials": {
+			"_type": "object",
+			"_data": {
+				"name": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_string": true,
+					"_data": "属性名"
+				},
+				"text": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_string": true,
+					"_data": "描述信息"
+				},
+				"getHeroStatus": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_lint": true,
+					"_data": "勇者属性的修正"
+				},
+				"getEnemyInfo": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_lint": true,
+					"_data": "怪物属性的修正",
+				},
+				"getDamageInfo": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_lint": true,
+					"_data": "伤害信息函数复写"
+				},
+				"afterBattle": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_lint": true,
+					"_data": "战后处理"
+				},
+				"isHalo": {
+					"_leaf": true,
+					"_type": "checkbox",
+					"_bool": "bool",
+					"_data": "是否光环-如果是，以上信息修正均在光环范围内进行，而非战斗过程。如果否，下面两个光环处理不会对属性产生影响。"
+				},
+				"updateCheckBlock": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_lint": true,
+					"_data": "光环处理(地图检查块)"
+				},
+				"checkBlock": {
+					"_leaf": true,
+					"_type": "textarea",
+					"_lint": true,
+					"_data": "勇士触碰光环效果"
+				},
+			},
+		},
+
+		"specials_template": {
+			"name": "新属性",
+			"text": "",
+		},
+
 	}
 }

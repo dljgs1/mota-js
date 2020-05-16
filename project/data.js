@@ -2,29 +2,88 @@ var data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d =
 {
 	"main": {
 		"floorIds": [
+			"MT0",
 			"sample0",
 			"sample1",
 			"sample2",
-			"sample3",
-			"MT0"
+			"sample3"
 		],
 		"images": [
+			"light1.png",
 			"bg.jpg",
-			"winskin.png"
+			"winskin.png",
+			"sky.jpg"
 		],
 		"tilesets": [
-			"magictower.png"
+			"magictower.png",
+			"Tilesets/001-Grassland01.png",
+			"Tilesets/002-Woods01.png",
+			"Tilesets/003-Forest01.png",
+			"Tilesets/004-Mountain01.png",
+			"Tilesets/005-Beach01.png",
+			"Tilesets/006-Desert01.png",
+			"Tilesets/007-Swamp01.png",
+			"Tilesets/008-Snowfield01.png",
+			"Tilesets/009-CastleTown01.png",
+			"Tilesets/010-CastleTown02.png",
+			"Tilesets/011-PortTown01.png",
+			"Tilesets/012-PortTown02.png",
+			"Tilesets/013-PostTown01.png",
+			"Tilesets/014-PostTown02.png",
+			"Tilesets/015-ForestTown01.png",
+			"Tilesets/016-ForestTown02.png",
+			"Tilesets/017-MineTown01.png",
+			"Tilesets/018-MineTown02.png",
+			"Tilesets/019-DesertTown01.png",
+			"Tilesets/020-DesertTown02.png",
+			"Tilesets/021-SnowTown01.png",
+			"Tilesets/022-SnowTown02.png",
+			"Tilesets/023-FarmVillage01.png",
+			"Tilesets/024-FarmVillage02.png",
+			"Tilesets/025-Castle01.png",
+			"Tilesets/026-Castle02.png",
+			"Tilesets/027-Castle03.png",
+			"Tilesets/028-Church01.png",
+			"Tilesets/029-Church02.png",
+			"Tilesets/030-Ship01.png",
+			"Tilesets/031-Ship02.png",
+			"Tilesets/032-Heaven01.png",
+			"Tilesets/033-Heaven02.png",
+			"Tilesets/034-Bridge01.png",
+			"Tilesets/035-Ruins01.png",
+			"Tilesets/036-Shop01.png",
+			"Tilesets/037-Fort01.png",
+			"Tilesets/038-Fort02.png",
+			"Tilesets/039-Tower01.png",
+			"Tilesets/040-Tower02.png",
+			"Tilesets/041-EvilCastle01.png",
+			"Tilesets/042-EvilCastle02.png",
+			"Tilesets/043-Cave01.png",
+			"Tilesets/044-Cave02.png",
+			"Tilesets/045-Cave03.png",
+			"Tilesets/046-Cave04.png",
+			"Tilesets/047-Mine01.png",
+			"Tilesets/048-Sewer01.png",
+			"Tilesets/049-InnerBody01.png",
+			"Tilesets/050-DarkSpace01.png"
 		],
 		"animates": [
 			"hand",
 			"sword",
-			"zone"
+			"zone",
+			"hand_sword",
+			"jianji"
 		],
 		"bgms": [
-			"bgm.mp3"
+			"bgm.mp3",
+			"FT.mp3"
 		],
 		"sounds": [
+			"crack.mp3",
+			"potion.mp3",
 			"floor.mp3",
+			"floor_fly.mp3",
+			"floor_long.mp3",
 			"attack.mp3",
 			"door.mp3",
 			"item.mp3",
@@ -33,7 +92,11 @@ var data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d =
 			"jump.mp3",
 			"pickaxe.mp3",
 			"bomb.mp3",
-			"centerFly.mp3"
+			"centerFly.mp3",
+			"thunder.mp3",
+			"thunder_big.mp3",
+			"rain.ogg",
+			"sword.ogg"
 		],
 		"nameMap": {
 			"背景图.jpg": "bg.jpg",
@@ -60,14 +123,14 @@ var data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d =
 			]
 		],
 		"equipName": [
-			"武器",
-			"盾牌"
+			"功法",
+			"法则"
 		],
-		"startBgm": "bgm.mp3",
-		"statusLeftBackground": "url(project/images/ground.png) repeat",
+		"startBgm": null,
+		"statusLeftBackground": null,
 		"statusTopBackground": "url(project/images/ground.png) repeat",
 		"toolsBackground": "url(project/images/ground.png) repeat",
-		"borderColor": "#CCCCCC",
+		"borderColor": "#111111",
 		"statusBarColor": "white",
 		"hardLabelColor": "red",
 		"floorChangingBackground": "black",
@@ -77,18 +140,18 @@ var data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d =
 	},
 	"firstData": {
 		"title": "魔塔样板",
-		"name": "template",
-		"version": "Ver 2.6.3",
+		"name": "template3.0",
+		"version": "Ver 3.0",
 		"floorId": "sample0",
 		"hero": {
-			"name": "阳光",
+			"name": "杨光",
 			"lv": 1,
-			"hpmax": 9999,
+			"hpmax": 1000,
 			"hp": 1000,
 			"manamax": -1,
-			"mana": 0,
-			"atk": 100,
-			"def": 100,
+			"mana": 1,
+			"atk": 10,
+			"def": 10,
 			"mdef": 0,
 			"money": 0,
 			"experience": 0,
@@ -104,7 +167,7 @@ var data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d =
 				"equips": {}
 			},
 			"loc": {
-				"direction": "up",
+				"direction": "right",
 				"x": 6,
 				"y": 10
 			},
@@ -246,69 +309,8 @@ var data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d =
 				"text": "接下来会执行startText中的事件"
 			}
 		],
-		"startText": [
-			"Hi，欢迎来到 HTML5 魔塔样板！\n\n本样板由艾之葵制作，可以让你在不会写任何代码\n的情况下也能做出属于自己的H5魔塔！",
-			"这里游戏开始时的剧情。\n定义在data.js的startText处。\n\n你可以在这里写上自己的内容。",
-			"赶快来试一试吧！"
-		],
+		"startText": [],
 		"shops": [
-			{
-				"id": "moneyShop1",
-				"name": "贪婪之神",
-				"icon": "blueShop",
-				"textInList": "1F金币商店",
-				"commonTimes": false,
-				"mustEnable": false,
-				"use": "money",
-				"need": "20+10*times*(times+1)",
-				"text": "勇敢的武士啊，给我${need}金币就可以：",
-				"choices": [
-					{
-						"text": "生命+800",
-						"effect": "status:hp+=800"
-					},
-					{
-						"text": "攻击+4",
-						"effect": "status:atk+=4"
-					},
-					{
-						"text": "防御+4",
-						"effect": "status:def+=4"
-					},
-					{
-						"text": "魔防+10",
-						"effect": "status:mdef+=10"
-					}
-				]
-			},
-			{
-				"id": "expShop1",
-				"name": "经验之神",
-				"icon": "pinkShop",
-				"textInList": "1F经验商店",
-				"commonTimes": false,
-				"mustEnable": false,
-				"use": "experience",
-				"need": "-1",
-				"text": "勇敢的武士啊，给我若干经验就可以：",
-				"choices": [
-					{
-						"text": "等级+1",
-						"need": "100",
-						"effect": "status:lv+=1;status:hp+=1000;status:atk+=7;status:def+=7"
-					},
-					{
-						"text": "攻击+5",
-						"need": "30",
-						"effect": "status:atk+=5"
-					},
-					{
-						"text": "防御+5",
-						"need": "30",
-						"effect": "status:def+=5"
-					}
-				]
-			},
 			{
 				"id": "keyShop1",
 				"textInList": "回收钥匙商店",
@@ -319,39 +321,8 @@ var data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d =
 		"levelUp": [
 			{
 				"need": "0",
-				"title": "",
-				"action": [
-					{
-						"type": "comment",
-						"text": "此处是初始等级，只需填写称号"
-					}
-				]
-			},
-			{
-				"need": "20",
-				"title": "第二级",
-				"action": [
-					{
-						"type": "setValue",
-						"name": "status:atk",
-						"value": "status:atk+10"
-					},
-					{
-						"type": "setValue",
-						"name": "status:def",
-						"value": "status:def+10"
-					}
-				]
-			},
-			{
-				"need": "40",
-				"title": "",
-				"action": [
-					{
-						"type": "tip",
-						"text": "恭喜升级"
-					}
-				]
+				"title": "凡阶",
+				"action": []
 			}
 		]
 	},
@@ -359,9 +330,9 @@ var data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d =
 		"lavaDamage": 100,
 		"poisonDamage": 10,
 		"weakValue": 20,
-		"redJewel": 3,
-		"blueJewel": 3,
-		"greenJewel": 5,
+		"redJewel": 1,
+		"blueJewel": 1,
+		"greenJewel": 3,
 		"redPotion": 100,
 		"bluePotion": 250,
 		"yellowPotion": 500,
@@ -376,27 +347,28 @@ var data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d =
 	},
 	"flags": {
 		"enableFloor": true,
-		"enableName": false,
-		"enableLv": false,
-		"enableHPMax": false,
-		"enableMana": false,
+		"enableName": true,
+		"enableLv": true,
+		"enableHPMax": true,
+		"enableMana": true,
 		"enableMDef": true,
-		"enableMoney": true,
-		"enableExperience": false,
-		"enableLevelUp": false,
-		"levelUpLeftMode": false,
+		"enableMoney": false,
+		"enableExperience": true,
+		"enableLevelUp": true,
+		"enableAnimate": true,
+		"levelUpLeftMode": true,
 		"enableKeys": true,
 		"enablePZF": false,
 		"enableDebuff": false,
 		"enableSkill": false,
-		"flyNearStair": true,
+		"flyNearStair": false,
 		"flyRecordPosition": false,
 		"pickaxeFourDirections": false,
 		"bombFourDirections": false,
 		"snowFourDirections": false,
 		"bigKeyIsBox": false,
 		"steelDoorWithoutKey": false,
-		"itemFirstText": true,
+		"itemFirstText": false,
 		"equipment": false,
 		"equipboxButton": false,
 		"iconInEquipbox": false,
@@ -408,18 +380,19 @@ var data_a1e2fb4a_e986_4524_b0da_9b7ba7c0874d =
 		"useLoop": false,
 		"startUsingCanvas": false,
 		"startDirectly": false,
-		"statusCanvas": false,
+		"statusCanvas": true,
 		"statusCanvasRowsOnMobile": 3,
-		"displayEnemyDamage": true,
+		"displayEnemyDamage": false,
 		"displayCritical": true,
 		"displayExtraDamage": true,
 		"enableGentleClick": true,
 		"potionWhileRouting": false,
 		"ignoreChangeFloor": true,
-		"canGoDeadZone": false,
+		"canGoDeadZone": true,
 		"enableMoveDirectly": true,
 		"enableDisabledShop": true,
 		"disableShopOnDamage": false,
+		"blurFg": false,
 		"checkConsole": false
 	}
 }
